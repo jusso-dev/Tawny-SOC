@@ -1,0 +1,49 @@
+{
+  "name": "tawny-soc",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 3001",
+    "build": "next build",
+    "start": "next start -p 3001",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "seed": "node scripts/seed-demo.mjs",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:push": "drizzle-kit push",
+    "db:studio": "drizzle-kit studio"
+  },
+  "dependencies": {
+    "@better-auth/drizzle-adapter": "^1.6.11",
+    "@next/eslint-plugin-next": "^16.0.0",
+    "better-auth": "^1.6.11",
+    "clsx": "^2.1.1",
+    "dotenv": "^17.4.2",
+    "drizzle-orm": "^0.45.2",
+    "lucide-react": "^0.460.0",
+    "next": "^16.0.0",
+    "node-cron": "^4.2.1",
+    "postgres": "^3.4.9",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "uuid": "^14.0.0",
+    "yaml": "^2.9.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/node-cron": "^3.0.11",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@types/uuid": "^11.0.0",
+    "drizzle-kit": "^0.31.10",
+    "eslint": "^9.16.0",
+    "eslint-config-next": "^16.0.0",
+    "tsx": "^4.22.3",
+    "typescript": "^5.7.0",
+    "vitest": "^4.1.7"
+  },
+  "packageManager": "pnpm@10.0.0"
+}

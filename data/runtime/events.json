@@ -1,0 +1,27 @@
+[
+  {
+    "id": "event-41050",
+    "source": "tawny",
+    "kind": "telemetry",
+    "title": "Suspicious DNS Query Shape",
+    "severity": "medium",
+    "status": "open",
+    "timestamp": "2026-05-27T08:34:03.079Z",
+    "tenantId": "demo-tenant",
+    "agentId": "demo-agent-03",
+    "hostname": "mac-design-04",
+    "os": "Macos",
+    "eventType": "DnsQuery",
+    "telemetryId": 41050,
+    "payload": {
+      "query_name": "a83kdl29dls02ka9sldk20v.example"
+    },
+    "matchedRules": [
+      "tawny-sigma-suspicious-dns-dga-shape"
+    ],
+    "mitreTechniques": [
+      "T1071.004",
+      "T1568"
+    ]
+  }
+]
