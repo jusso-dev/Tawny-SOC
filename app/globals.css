@@ -974,6 +974,42 @@ td span {
   margin-bottom: 0.75rem;
 }
 
+.query-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  gap: 0.65rem;
+  align-items: end;
+}
+
+.query-input {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.query-input span,
+.query-meta {
+  color: var(--faint);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.query-input input {
+  min-height: 2.45rem;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface-2);
+  color: var(--text);
+  padding: 0 0.75rem;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+}
+
+.query-error {
+  margin: 0.65rem 0 0;
+  color: var(--red);
+  font-size: 0.82rem;
+}
+
 .query-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -1237,6 +1273,7 @@ td span {
   .detail-layout,
   .intel-grid,
   .settings-grid,
+  .query-form,
   .query-grid {
     grid-template-columns: 1fr;
   }

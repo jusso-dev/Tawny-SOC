@@ -29,9 +29,28 @@ The SOC workspace includes:
 - Detection Rules: Sigma-style detection-as-code view with YAML, metadata, test status, version-history placeholder, last-triggered state, and tuning actions.
 - Threat Intelligence: feed management and IOC browser for STIX, OpenIOC, CSV, TXT, MISP, OTX, URLhaus, and custom URL feeds.
 - Playbooks: ordered SOC workflows for malware, suspicious PowerShell, new admin user, suspicious outbound IP, credential theft, host isolation, and suspicious URL style investigations.
-- Search / Hunt: query-builder workspace for event type, host, user, process, hash, IP, domain, and time range.
+- Search / Hunt: YAAQL-powered workspace for event type, host, user, process, hash, IP, domain, time, and payload-path queries.
 - Integrations: email, Slack, webhook, Microsoft Sentinel, Wazuh, and Kelpie delivery state.
 - SOC Settings: severity mapping, routing rules, suppression, case numbering, SLAs, TI feeds, Kelpie sync, and role permissions.
+
+## YAAQL Search Language
+
+Tawny-SOC includes YAAQL, the "Yet Another Annoying Query Language" filter used by the Search / Hunt page and the `q` parameter on `GET /api/events` and `GET /api/alerts`. It is intentionally small and KQL-like so analysts can type one string instead of juggling another pile of vendor-specific search widgets.
+
+YAAQL supports:
+
+- Free text: `"powershell.exe"` searches across the whole normalized record.
+- Field contains: `host:win-*`, `title:dns`, `commandLine:powershell`.
+- Field exact match: `eventType=ProcessLaunch`, `kind=alert`, `severity=critical`.
+- Negation: `status!=suppressed`, `not host:lab-*`.
+- Boolean logic: `severity:critical or severity:high`, `kind:alert and host:win-*`.
+- Grouping: `(eventType=DnsQuery or has:domain) and severity in (medium, high)`.
+- Lists: `severity in (critical, high)`, `rule in (tawny-sigma-ps-encoded-command, tawny-sigma-credential-dump-artifact)`.
+- Existence checks: `has:ip`, `has:domain`, `has:hash`, `has:mitre`.
+- Numeric and timestamp comparisons: `confidence>=0.8`, `timestamp>=2026-05-27T00:00:00Z`.
+- Payload paths: `payload.alert.command_line:powershell`, `payload.query_name:*.example`.
+
+Adjacent terms are treated as `and`, so `host:win-* powershell` is the same as `host:win-* and powershell`. Common aliases are built in for analyst-friendly fields: `host`, `type`, `rule`, `mitre`, `tenant`, `agent`, `cmd`, `ip`, `domain`, `hash`, `user`, and `process`.
 
 ## Tawny Integration
 
