@@ -2,7 +2,6 @@ import {
   Activity,
   AlertTriangle,
   Braces,
-  ClipboardList,
   DatabaseZap,
   FolderKanban,
   RadioTower,
@@ -13,6 +12,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { requireSession } from "@/lib/session";
 
 const nav = [
   { href: "/", label: "SOC Overview", icon: Activity },
@@ -26,7 +26,9 @@ const nav = [
   { href: "/settings", label: "SOC Settings", icon: Settings },
 ];
 
-export function SocShell({ children, active }: { children: React.ReactNode; active: string }) {
+export async function SocShell({ children, active }: { children: React.ReactNode; active: string }) {
+  await requireSession();
+
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -51,15 +53,11 @@ export function SocShell({ children, active }: { children: React.ReactNode; acti
           })}
         </nav>
         <div className="sidebar-actions">
-          <Link className="text-button full" href="/admin">
-            <ClipboardList size={15} aria-hidden />
-            Team admin
-          </Link>
           <ThemeToggle />
         </div>
         <div className="trust-box">
           <ShieldAlert size={16} aria-hidden />
-          <p>Every alert, case change, Kelpie sync, suppression, and playbook task should stay audit-ready.</p>
+          <p>Operational changes are recorded in the SOC timeline.</p>
         </div>
       </aside>
       <main className="workspace">{children}</main>

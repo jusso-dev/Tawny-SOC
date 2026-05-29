@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowRight, CheckCircle2, Clock3, RadioTower, ShieldAlert, Users } from "lucide-react";
+import { AlertTriangle, ArrowRight, Clock3, RadioTower, ShieldAlert, Users } from "lucide-react";
 import Link from "next/link";
 import { PageHeader, SocShell } from "@/components/soc-shell";
 import { getSocData, relativeTime, severityClass } from "@/lib/soc-domain";
@@ -42,7 +42,6 @@ export default async function Home() {
         eyebrow="SOC overview"
         title="Tawny endpoint signals, grouped into an analyst-ready SIEM workspace."
         description="Alert pressure, queue health, MITRE coverage, threat intel, and Kelpie sync state in one operational view."
-        actions={<span className="health-pill"><CheckCircle2 size={16} aria-hidden /> Tawny ingest ready</span>}
       />
 
       <section className="metric-row soc-metrics" aria-label="SOC summary">
@@ -80,19 +79,28 @@ export default async function Home() {
             </div>
             <Clock3 size={18} aria-hidden />
           </div>
-          <div className="trend-chart" aria-label="Alert and case trend">
-            {overview.trend.map((point) => (
-              <div key={point.label}>
-                <span style={{ height: `${Math.max(8, point.alerts * 8)}px` }} />
-                <i style={{ height: `${Math.max(4, point.cases * 10)}px` }} />
-                <small>{point.label}</small>
+          {overview.trend.some((point) => point.alerts > 0 || point.cases > 0) ? (
+            <>
+              <div className="trend-chart" aria-label="Alert and case trend">
+                {overview.trend.map((point) => (
+                  <div key={point.label}>
+                    <span style={{ height: `${point.alerts * 8}px` }} />
+                    <i style={{ height: `${point.cases * 10}px` }} />
+                    <small>{point.label}</small>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-          <div className="chart-legend">
-            <span><b className="legend-alert" /> Alerts</span>
-            <span><b className="legend-case" /> Cases</span>
-          </div>
+              <div className="chart-legend">
+                <span><b className="legend-alert" /> Alerts</span>
+                <span><b className="legend-case" /> Cases</span>
+              </div>
+            </>
+          ) : (
+            <div className="empty-state compact">
+              <Clock3 size={22} aria-hidden />
+              <p>No alert or case timeline data yet.</p>
+            </div>
+          )}
         </section>
       </div>
 
@@ -171,7 +179,7 @@ export default async function Home() {
         </div>
         <div className="endpoint">
           <code>POST /api/ingest/tawny</code>
-          <span>Bearer token optional for local development</span>
+          <span>{process.env.TAWNY_SOC_INGEST_TOKEN ? "Bearer token required" : "No ingest token configured"}</span>
         </div>
       </section>
     </SocShell>

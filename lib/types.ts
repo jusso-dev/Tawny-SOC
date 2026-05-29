@@ -5,7 +5,7 @@ export type KelpieSyncStatus = "not_synced" | "synced" | "failed" | "stale" | "c
 
 export type SocEvent = {
   id: string;
-  source: "tawny" | "demo" | "manual";
+  source: "tawny" | "manual";
   kind: "alert" | "telemetry";
   title: string;
   severity: Severity;
@@ -74,7 +74,7 @@ export type Playbook = {
 
 export type ThreatIntelMatch = {
   id: string;
-  type: "ip" | "domain" | "url" | "hash" | "email" | "file";
+  type: "ip" | "cidr" | "domain" | "url" | "hash" | "email" | "file" | "cve";
   value: string;
   sourceFeed: string;
   confidence: number;

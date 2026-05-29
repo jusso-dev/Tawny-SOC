@@ -1,5 +1,6 @@
 import { FolderPlus, Send } from "lucide-react";
 import Link from "next/link";
+import { ActionButton } from "@/components/action-button";
 import { PageHeader, SocShell } from "@/components/soc-shell";
 import { getSocData, relativeTime, severityClass } from "@/lib/soc-domain";
 
@@ -11,7 +12,7 @@ export default async function IncidentsPage() {
       <PageHeader
         eyebrow="Incidents and cases"
         title="Group alerts into native Tawny cases, then sync to Kelpie when the investigation needs case management depth."
-        actions={<button className="text-button"><FolderPlus size={15} aria-hidden /> New case</button>}
+        actions={<Link className="text-button" href="/alerts"><FolderPlus size={15} aria-hidden /> New case from alert</Link>}
       />
 
       <section className="panel">
@@ -48,7 +49,11 @@ export default async function IncidentsPage() {
                   <td>{incident.linkedHosts.join(", ") || "None"}</td>
                   <td>{incident.linkedAlertIds.length}</td>
                   <td>
-                    {incident.kelpieUrl ? <Link href={incident.kelpieUrl}>Open</Link> : <button className="inline-action"><Send size={14} aria-hidden /> Sync</button>}
+                    {incident.kelpieUrl ? (
+                      <Link href={incident.kelpieUrl}>Open</Link>
+                    ) : (
+                      <ActionButton className="inline-action" action="sync-incident-kelpie" payload={{ incidentId: incident.id }}><Send size={14} aria-hidden /> Sync</ActionButton>
+                    )}
                     <span>{incident.kelpieSyncStatus.replace("_", " ")}</span>
                   </td>
                   <td>{relativeTime(incident.updatedAt)}</td>

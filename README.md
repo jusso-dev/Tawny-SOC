@@ -26,7 +26,7 @@ The SOC workspace includes:
 - Alert Queue: severity, confidence, status, rule, source, host, user, process, MITRE, TI hits, assignee, filters, and bulk action controls.
 - Alert Detail: summary, evidence, raw JSON, threat intel matches, MITRE mapping, analyst timeline, and actions for case creation, Kelpie promotion, suppression, and response.
 - Incidents / Cases: native Tawny-SOC case grouping with priority, lifecycle, assignment, TLP/PAP, classification, observables, linked hosts, linked alerts, and Kelpie sync state.
-- Detection Rules: Sigma-style detection-as-code view with YAML, metadata, test status, version-history placeholder, last-triggered state, and tuning actions.
+- Detection Rules: Sigma-style detection-as-code view with YAML import, metadata, test status, current revision, last-triggered state, and tuning actions.
 - Threat Intelligence: feed management and IOC browser for STIX, OpenIOC, CSV, TXT, MISP, OTX, URLhaus, and custom URL feeds.
 - Playbooks: ordered SOC workflows for malware, suspicious PowerShell, new admin user, suspicious outbound IP, credential theft, host isolation, and suspicious URL style investigations.
 - Search / Hunt: YAAQL-powered workspace for event type, host, user, process, hash, IP, domain, time, and payload-path queries.

@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
+import { getSession } from "@/lib/session";
 import { listAlerts } from "@/lib/store";
 import { filterWithYaaql } from "@/lib/yaaql";
 
 export async function GET(request: Request) {
+  if (!await getSession()) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const alerts = await listAlerts();
   const query = new URL(request.url).searchParams.get("q") ?? "";
   const result = filterWithYaaql(alerts, query);

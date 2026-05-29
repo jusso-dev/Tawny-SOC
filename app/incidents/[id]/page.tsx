@@ -1,6 +1,7 @@
 import { ClipboardList, ExternalLink, PlayCircle, Send, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { ActionButton } from "@/components/action-button";
 import { PageHeader, SocShell } from "@/components/soc-shell";
 import { getSocData, relativeTime, severityClass } from "@/lib/soc-domain";
 
@@ -17,14 +18,18 @@ export default async function IncidentDetailPage({ params }: { params: Promise<{
         eyebrow="Case detail"
         title={`${incident.number}: ${incident.title}`}
         description={`${incident.status} · ${incident.assignee ?? "Unassigned"} · ${incident.kelpieSyncStatus.replace("_", " ")}`}
-        actions={incident.kelpieUrl ? <Link className="text-button" href={incident.kelpieUrl}><ExternalLink size={15} aria-hidden /> Open in Kelpie</Link> : <button className="text-button"><Send size={15} aria-hidden /> Promote to Kelpie</button>}
+        actions={incident.kelpieUrl ? (
+          <Link className="text-button" href={incident.kelpieUrl}><ExternalLink size={15} aria-hidden /> Open in Kelpie</Link>
+        ) : (
+          <ActionButton className="text-button" action="sync-incident-kelpie" payload={{ incidentId: incident.id }}><Send size={15} aria-hidden /> Promote to Kelpie</ActionButton>
+        )}
       />
 
       <section className="action-bar">
-        <button><ShieldCheck size={15} aria-hidden /> Change state</button>
-        <button><PlayCircle size={15} aria-hidden /> Run playbook</button>
-        <button><ClipboardList size={15} aria-hidden /> Add task</button>
-        <button><Send size={15} aria-hidden /> Sync comments</button>
+        <ActionButton action="change-incident-state" payload={{ incidentId: incident.id }}><ShieldCheck size={15} aria-hidden /> Change state</ActionButton>
+        <ActionButton action="run-playbook" payload={{ incidentId: incident.id }}><PlayCircle size={15} aria-hidden /> Run playbook</ActionButton>
+        <ActionButton action="add-task" payload={{ incidentId: incident.id }}><ClipboardList size={15} aria-hidden /> Add task</ActionButton>
+        <ActionButton action="sync-comments" payload={{ incidentId: incident.id }}><Send size={15} aria-hidden /> Sync comments</ActionButton>
       </section>
 
       <div className="grid detail-layout">

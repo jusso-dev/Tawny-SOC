@@ -32,6 +32,8 @@ const FIELD_ALIASES: Record<string, string[]> = {
   command: ["commandLine", "command_line"],
   commandline: ["commandLine", "command_line"],
   cmd: ["commandLine", "command_line"],
+  cidr: ["cidr", "network", "netblock"],
+  cve: ["cve", "cveID", "cve_id", "vulnerability"],
   domain: ["domain", "query_name", "queryName", "dns_query", "url_domain"],
   event: ["eventType"],
   externalip: ["externalIps", "destination_ip", "remote_ip"],
@@ -46,6 +48,7 @@ const FIELD_ALIASES: Record<string, string[]> = {
   tenant: ["tenantId"],
   time: ["timestamp"],
   type: ["eventType"],
+  url: ["url", "request_url", "requestUrl", "url_full", "urlFull"],
 };
 
 function isOperatorChar(value: string) {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { notify } from "@/components/toast-provider";
 
 export function MfaForm() {
   const [message, setMessage] = useState("");
@@ -19,8 +20,10 @@ export function MfaForm() {
       });
       if (!res.ok) {
         setMessage("Code verification failed.");
+        notify("MFA code verification failed.", "error");
         return;
       }
+      notify("MFA verified.", "success");
       window.location.href = "/";
     });
   }

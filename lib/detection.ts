@@ -1,4 +1,5 @@
-import { sigmaRules } from "@/lib/rules";
+import { ruleMatchesPayload } from "@/lib/sigma";
+import { sigmaRules as builtinSigmaRules } from "@/lib/rules";
 import type { Severity, SigmaRule } from "@/lib/types";
 
 const severityScore: Record<Severity, number> = {
@@ -29,34 +30,8 @@ export function payloadText(payload: unknown): string {
   }
 }
 
-export function matchRules(payload: unknown, eventType?: string, explicitRuleId?: string): SigmaRule[] {
-  const text = payloadText(payload);
-  const matches = sigmaRules.filter((rule) => {
-    if (explicitRuleId && rule.id === explicitRuleId) return true;
-    const haystack = `${text} ${String(eventType ?? "").toLowerCase()}`;
-
-    if (rule.id.includes("ps-encoded-command")) {
-      return /powershell|pwsh/.test(haystack) && /-enc|-encodedcommand|\/encodedcommand/.test(haystack);
-    }
-    if (rule.id.includes("lolbin-mshta")) {
-      return haystack.includes("mshta") && /http:\/\/|https:\/\/|javascript:|vbscript:/.test(haystack);
-    }
-    if (rule.id.includes("curl-pipe")) {
-      return /(curl|wget).*(\|\s*(sh|bash|python))/.test(haystack);
-    }
-    if (rule.id.includes("launch-agent")) {
-      return /launchagents|launchdaemons|\/library\/launch/.test(haystack);
-    }
-    if (rule.id.includes("dns-dga")) {
-      return /\b[a-z0-9]{22,}\.[a-z]{2,}\b/.test(haystack);
-    }
-    if (rule.id.includes("credential-dump")) {
-      return /lsass|procdump|sekurlsa::|minidump|comsvcs\.dll/.test(haystack);
-    }
-    return false;
-  });
-
-  return matches;
+export function matchRules(payload: unknown, eventType?: string, explicitRuleId?: string, rules: SigmaRule[] = builtinSigmaRules): SigmaRule[] {
+  return rules.filter((rule) => ruleMatchesPayload(rule, payload, eventType, explicitRuleId));
 }
 
 export function triageSummary(input: {

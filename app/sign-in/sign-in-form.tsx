@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { notify } from "@/components/toast-provider";
 
 export function SignInForm({ next }: { next: string }) {
   const [message, setMessage] = useState("");
@@ -19,15 +20,24 @@ export function SignInForm({ next }: { next: string }) {
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
       });
+      const responseBody = await res.json().catch(() => ({})) as { twoFactorRedirect?: boolean };
 
       if (!res.ok) {
         setMessage("Sign in failed. Check your details and try again.");
+        notify("Sign in failed.", "error");
         return;
       }
       if (mode === "magic") {
-        setMessage("Magic link generated. In development, check the server logs for the link.");
+        setMessage("Magic link requested. Check your email delivery channel.");
+        notify("Magic link requested.", "success");
         return;
       }
+      if (responseBody.twoFactorRedirect) {
+        notify("Enter your MFA code.", "success");
+        window.location.href = "/mfa";
+        return;
+      }
+      notify("Signed in.", "success");
       window.location.href = next;
     });
   }

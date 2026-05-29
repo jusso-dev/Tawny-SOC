@@ -1,11 +1,15 @@
 import { NextResponse } from "next/server";
-import { playbooks, sigmaRules } from "@/lib/rules";
+import { playbooks } from "@/lib/rules";
+import { getSession } from "@/lib/session";
+import { listSigmaRules } from "@/lib/sigma";
 import { listAlerts } from "@/lib/store";
 
 export async function POST(request: Request) {
+  if (!await getSession()) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const body = await request.json().catch(() => ({}));
   const alertId = typeof body.alert_id === "string" ? body.alert_id : "";
   const alerts = await listAlerts();
+  const sigmaRules = await listSigmaRules();
   const alert = alerts.find((item) => item.id === alertId) ?? alerts[0];
 
   if (!alert) {

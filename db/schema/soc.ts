@@ -1,4 +1,4 @@
-import { boolean, index, integer, jsonb, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { boolean, index, integer, jsonb, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 import type { IncidentStatus, KelpieSyncStatus, Severity } from "@/lib/types";
 
 export const socEvent = pgTable("soc_event", {
@@ -38,6 +38,7 @@ export const socAlert = pgTable("soc_alert", {
   hostname: text("hostname"),
   os: text("os"),
   eventType: text("event_type"),
+  assignee: text("assignee"),
   telemetryId: text("telemetry_id"),
   alertId: text("alert_id"),
   ruleId: text("rule_id"),
@@ -123,12 +124,30 @@ export const socThreatIntelFeed = pgTable("soc_threat_intel_feed", {
   type: text("type").notNull(),
   url: text("url").notNull(),
   enabled: boolean("enabled").notNull().default(true),
-  status: text("status").notNull().default("healthy"),
+  status: text("status").notNull().default("paused"),
   indicatorCount: integer("indicator_count").notNull().default(0),
   lastRunAt: timestamp("last_run_at", { withTimezone: true }),
   lastError: text("last_error"),
 }, (table) => [
   index("soc_ti_feed_tenant_status_idx").on(table.tenantId, table.status),
+]);
+
+export const socThreatIntelIndicator = pgTable("soc_threat_intel_indicator", {
+  id: text("id").primaryKey(),
+  tenantId: text("tenant_id").notNull(),
+  feedId: text("feed_id").notNull().references(() => socThreatIntelFeed.id, { onDelete: "cascade" }),
+  type: text("type").notNull(),
+  value: text("value").notNull(),
+  sourceFeed: text("source_feed").notNull(),
+  confidence: integer("confidence").notNull().default(80),
+  tags: jsonb("tags").$type<string[]>().notNull().default([]),
+  firstSeen: timestamp("first_seen", { withTimezone: true }).notNull(),
+  lastSeen: timestamp("last_seen", { withTimezone: true }).notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }),
+}, (table) => [
+  index("soc_ti_indicator_tenant_type_idx").on(table.tenantId, table.type),
+  index("soc_ti_indicator_feed_idx").on(table.feedId),
+  uniqueIndex("soc_ti_indicator_tenant_feed_value_idx").on(table.tenantId, table.feedId, table.value),
 ]);
 
 export const socPlaybook = pgTable("soc_playbook", {
@@ -185,4 +204,14 @@ export const socDeliveryLog = pgTable("soc_delivery_log", {
   externalRef: text("external_ref"),
 }, (table) => [
   index("soc_delivery_tenant_state_idx").on(table.tenantId, table.state),
+]);
+
+export const socSetting = pgTable("soc_setting", {
+  id: text("id").primaryKey(),
+  tenantId: text("tenant_id").notNull(),
+  key: text("key").notNull(),
+  value: jsonb("value").$type<Record<string, unknown>>().notNull().default({}),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
+}, (table) => [
+  index("soc_setting_tenant_key_idx").on(table.tenantId, table.key),
 ]);

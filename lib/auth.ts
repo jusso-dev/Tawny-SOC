@@ -1,6 +1,6 @@
 import { drizzleAdapter } from "@better-auth/drizzle-adapter";
 import { betterAuth } from "better-auth";
-import { admin, haveIBeenPwned, magicLink, organization, twoFactor } from "better-auth/plugins";
+import { haveIBeenPwned, magicLink, organization, twoFactor } from "better-auth/plugins";
 import { nextCookies } from "better-auth/next-js";
 import { db, schema } from "@/lib/db/client";
 import { sendEmail } from "@/emails/send";
@@ -27,22 +27,32 @@ export const auth = betterAuth({
         maximumTeams: 25,
         allowRemovingAllTeams: false,
       },
+      requireEmailVerificationOnInvitation: false,
+      sendInvitationEmail: async ({ id, email, organization }) => {
+        const inviteUrl = `${appUrl}/accept-invite?invitationId=${encodeURIComponent(id)}`;
+        await sendEmail({
+          to: email,
+          subject: `Join ${organization.name} on Tawny-SOC`,
+          text: `Use this link to join ${organization.name} on Tawny-SOC: ${inviteUrl}`,
+          tenantId: organization.id,
+        });
+      },
     }),
     twoFactor({
       issuer: "Tawny-SOC",
       allowPasswordless: true,
     }),
     magicLink({
-      sendMagicLink: async ({ email, url }) => {
+      sendMagicLink: async ({ email, url, metadata }) => {
         await sendEmail({
           to: email,
           subject: "Sign in to Tawny-SOC",
           text: `Use this link to sign in to Tawny-SOC: ${url}`,
+          tenantId: typeof metadata?.tenantId === "string" ? metadata.tenantId : undefined,
         });
       },
     }),
     haveIBeenPwned(),
-    admin(),
     nextCookies(),
   ],
 });

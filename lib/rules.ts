@@ -247,7 +247,7 @@ export const playbooks: Playbook[] = [
       {
         name: "Report",
         owner: "Reporter",
-        objective: "Produce an audit-ready summary with evidence and rule improvement notes.",
+        objective: "Produce a summary with evidence and rule improvement notes.",
         actions: ["Summarize impact", "List actions taken", "Add detection tuning recommendations"],
       },
     ],

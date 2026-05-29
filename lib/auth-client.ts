@@ -8,7 +8,7 @@ export const authClient = createAuthClient({
     organizationClient({
       teams: { enabled: true },
     }),
-    twoFactorClient(),
+    twoFactorClient({ twoFactorPage: "/mfa" }),
     magicLinkClient(),
   ],
 });

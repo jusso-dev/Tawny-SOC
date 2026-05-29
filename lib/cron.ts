@@ -18,7 +18,8 @@ const jobDefinitions = [
     name: "soc-retention-sweep",
     schedule: "15 3 * * *",
     run: async () => {
-      // Placeholder for Postgres retention once retention policy controls are in the UI.
+      const { deleteExpiredThreatIntelIndicators } = await import("@/lib/store");
+      await deleteExpiredThreatIntelIndicators();
     },
   },
 ];
