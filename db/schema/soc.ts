@@ -215,3 +215,134 @@ export const socSetting = pgTable("soc_setting", {
 }, (table) => [
   index("soc_setting_tenant_key_idx").on(table.tenantId, table.key),
 ]);
+
+export const socIngestSource = pgTable("soc_ingest_source", {
+  id: text("id").primaryKey(),
+  tenantId: text("tenant_id").notNull(),
+  name: text("name").notNull(),
+  sourceType: text("source_type").notNull(),
+  authMode: text("auth_mode").notNull().default("shared-secret"),
+  parser: text("parser").notNull().default("generic-json"),
+  status: text("status").notNull().default("untested"),
+  lastSeenAt: timestamp("last_seen_at", { withTimezone: true }),
+  lastError: text("last_error"),
+  throughput: integer("throughput").notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
+}, (table) => [
+  index("soc_ingest_source_tenant_status_idx").on(table.tenantId, table.status),
+]);
+
+export const socIngestDeadLetter = pgTable("soc_ingest_dead_letter", {
+  id: text("id").primaryKey(),
+  tenantId: text("tenant_id").notNull(),
+  sourceId: text("source_id").references(() => socIngestSource.id, { onDelete: "set null" }),
+  reason: text("reason").notNull(),
+  payload: jsonb("payload").notNull(),
+  status: text("status").notNull().default("open"),
+  receivedAt: timestamp("received_at", { withTimezone: true }).notNull(),
+}, (table) => [
+  index("soc_ingest_dead_letter_tenant_status_idx").on(table.tenantId, table.status),
+]);
+
+export const socConnector = pgTable("soc_connector", {
+  id: text("id").primaryKey(),
+  tenantId: text("tenant_id").notNull(),
+  catalogId: text("catalog_id").notNull(),
+  provider: text("provider").notNull(),
+  category: text("category").notNull(),
+  name: text("name").notNull(),
+  authType: text("auth_type").notNull(),
+  status: text("status").notNull().default("untested"),
+  enabled: boolean("enabled").notNull().default(false),
+  schedule: text("schedule").notNull().default("manual"),
+  config: jsonb("config").$type<Record<string, unknown>>().notNull().default({}),
+  credentialReference: text("credential_reference"),
+  lastTestAt: timestamp("last_test_at", { withTimezone: true }),
+  lastSyncAt: timestamp("last_sync_at", { withTimezone: true }),
+  lastError: text("last_error"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
+}, (table) => [
+  index("soc_connector_tenant_status_idx").on(table.tenantId, table.status),
+  index("soc_connector_catalog_idx").on(table.catalogId),
+]);
+
+export const socReport = pgTable("soc_report", {
+  id: text("id").primaryKey(),
+  tenantId: text("tenant_id").notNull(),
+  framework: text("framework").notNull(),
+  title: text("title").notNull(),
+  status: text("status").notNull().default("draft"),
+  schedule: text("schedule").notNull().default("manual"),
+  evidence: jsonb("evidence").$type<string[]>().notNull().default([]),
+  generatedAt: timestamp("generated_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+}, (table) => [
+  index("soc_report_tenant_framework_idx").on(table.tenantId, table.framework),
+]);
+
+export const socRetentionPolicy = pgTable("soc_retention_policy", {
+  id: text("id").primaryKey(),
+  tenantId: text("tenant_id").notNull(),
+  target: text("target").notNull(),
+  hotDays: integer("hot_days").notNull().default(30),
+  archiveDays: integer("archive_days").notNull().default(180),
+  deleteAfterDays: integer("delete_after_days").notNull().default(365),
+  preserveCaseEvidence: boolean("preserve_case_evidence").notNull().default(true),
+  legalHold: boolean("legal_hold").notNull().default(false),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
+}, (table) => [
+  uniqueIndex("soc_retention_policy_tenant_target_idx").on(table.tenantId, table.target),
+]);
+
+export const socApiToken = pgTable("soc_api_token", {
+  id: text("id").primaryKey(),
+  tenantId: text("tenant_id").notNull(),
+  name: text("name").notNull(),
+  tokenHash: text("token_hash").notNull().unique(),
+  tokenPrefix: text("token_prefix").notNull(),
+  role: text("role").notNull().default("member"),
+  scopes: jsonb("scopes").$type<string[]>().notNull().default([]),
+  status: text("status").notNull().default("active"),
+  lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+  expiresAt: timestamp("expires_at", { withTimezone: true }),
+  createdBy: text("created_by"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+}, (table) => [
+  index("soc_api_token_tenant_status_idx").on(table.tenantId, table.status),
+  index("soc_api_token_hash_idx").on(table.tokenHash),
+]);
+
+export const socEvidence = pgTable("soc_evidence", {
+  id: text("id").primaryKey(),
+  tenantId: text("tenant_id").notNull(),
+  incidentId: text("incident_id").references(() => socIncident.id, { onDelete: "cascade" }),
+  alertId: text("alert_id").references(() => socAlert.id, { onDelete: "cascade" }),
+  evidenceType: text("evidence_type").notNull(),
+  title: text("title").notNull(),
+  sourceRef: text("source_ref"),
+  checksum: text("checksum"),
+  metadata: jsonb("metadata").$type<Record<string, unknown>>().notNull().default({}),
+  createdBy: text("created_by").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+}, (table) => [
+  index("soc_evidence_tenant_incident_idx").on(table.tenantId, table.incidentId),
+]);
+
+export const socAuditLog = pgTable("soc_audit_log", {
+  id: text("id").primaryKey(),
+  tenantId: text("tenant_id").notNull(),
+  actorId: text("actor_id"),
+  actorName: text("actor_name"),
+  action: text("action").notNull(),
+  resourceType: text("resource_type").notNull(),
+  resourceId: text("resource_id"),
+  detail: text("detail"),
+  metadata: jsonb("metadata").$type<Record<string, unknown>>().notNull().default({}),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+}, (table) => [
+  index("soc_audit_log_tenant_created_idx").on(table.tenantId, table.createdAt),
+]);

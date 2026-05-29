@@ -818,6 +818,99 @@ td span {
   color: var(--muted);
 }
 
+.threat-intel-heading p {
+  margin: 0.25rem 0 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
+.intel-controls {
+  display: grid;
+  grid-template-columns: minmax(16rem, 2fr) minmax(9rem, 0.7fr) minmax(13rem, 1fr) auto auto;
+  gap: 0.65rem;
+  align-items: end;
+  margin-bottom: 0.85rem;
+}
+
+.intel-controls label {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.intel-controls input,
+.intel-controls select {
+  min-width: 0;
+  min-height: 2.3rem;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--bg);
+  color: var(--text);
+  padding: 0 0.65rem;
+  text-transform: none;
+}
+
+.intel-controls input:focus,
+.intel-controls select:focus {
+  outline: 2px solid var(--accent-soft);
+  border-color: var(--accent);
+}
+
+.sort-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: inherit;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.sort-link.is-active {
+  color: var(--text);
+}
+
+.sort-link:hover,
+.sort-link:focus-visible {
+  color: var(--accent);
+  outline: none;
+}
+
+.threat-intel-table {
+  min-width: 78rem;
+}
+
+.pagination-bar,
+.pagination-actions,
+.pagination-disabled {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+}
+
+.pagination-bar {
+  justify-content: space-between;
+  margin-top: 0.85rem;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.pagination-disabled {
+  min-height: 2rem;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface-2);
+  padding: 0 0.65rem;
+  color: var(--faint);
+  font-weight: 650;
+  opacity: 0.62;
+}
+
 button:disabled,
 .primary-action[aria-disabled="true"] {
   cursor: not-allowed;
@@ -1529,6 +1622,46 @@ button:disabled,
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.settings-tabs,
+.settings-filter-tabs {
+  display: flex;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+
+.settings-tabs a,
+.settings-filter-tabs a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2rem;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--muted);
+  padding: 0 0.65rem;
+  text-decoration: none;
+  font-size: 0.8rem;
+  font-weight: 650;
+}
+
+.settings-tabs a:hover,
+.settings-tabs a:focus-visible,
+.settings-tabs a.active,
+.settings-filter-tabs a:hover,
+.settings-filter-tabs a:focus-visible,
+.settings-filter-tabs a.active {
+  outline: none;
+  border-color: oklch(0.62 0.06 68);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.settings-section-panel {
+  max-width: 58rem;
+}
+
 .import-shell {
   position: relative;
 }
@@ -1576,7 +1709,8 @@ button:disabled,
 }
 
 .integration-stack,
-.admin-stack {
+.admin-stack,
+.api-token-stack {
   display: grid;
   gap: 0.75rem;
   margin-bottom: 0.75rem;
@@ -1585,6 +1719,12 @@ button:disabled,
 .channel-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.retention-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.75rem;
 }
 
@@ -1636,6 +1776,43 @@ button:disabled,
   gap: 0.65rem;
 }
 
+.routing-matrix,
+.api-token-list {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.routing-matrix fieldset,
+.scope-fieldset {
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  padding: 0.75rem;
+}
+
+.routing-matrix legend,
+.scope-fieldset legend {
+  padding: 0 0.25rem;
+  color: var(--text);
+  font-size: 0.78rem;
+  font-weight: 750;
+}
+
+.routing-matrix legend span {
+  display: block;
+  margin-top: 0.2rem;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 550;
+}
+
+.scope-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.45rem;
+}
+
 .config-form label {
   display: grid;
   gap: 0.35rem;
@@ -1672,6 +1849,23 @@ button:disabled,
 .checkbox-field input {
   width: 1rem;
   min-height: 1rem;
+}
+
+.checkbox-field small {
+  display: block;
+  margin-top: 0.15rem;
+  color: var(--faint);
+  font-size: 0.7rem;
+  font-weight: 550;
+  line-height: 1.35;
+}
+
+.token-meta {
+  display: flex;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+  color: var(--faint);
+  font-size: 0.76rem;
 }
 
 .config-actions {
@@ -1948,7 +2142,10 @@ td .inline-action,
   .hunt-workbench,
   .hunt-fields-grid,
   .channel-grid,
-  .config-grid {
+  .retention-grid,
+  .config-grid,
+  .scope-grid,
+  .intel-controls {
     grid-template-columns: 1fr;
   }
 

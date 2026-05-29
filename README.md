@@ -18,20 +18,34 @@ Open `http://localhost:3001`.
 
 Do not run the web app locally through Docker. The `app` Docker Compose service is behind an explicit profile for container/deployment checks only.
 
+The local seed creates:
+
+- Local tenant: `local-tenant`
+- Local analyst: `analyst@tawny.local`
+- Local password: `TawnySocLocal123!`
+- Starter threat intel feed endpoints, including OpenPhish and PhishTank URL feeds
+
+`pnpm seed` is intended for local reset work. It keeps the local analyst and organization ready, seeds starter threat intel feed endpoints, and clears local SOC alerts, telemetry, cases, tasks, delivery logs, and timelines.
+
 ## SIEM Overview
 
 The SOC workspace includes:
 
 - SOC Overview: alert volume, incident volume, open cases, critical/high alerts, affected hosts, queue health, top rules, top MITRE tactics, top users, top processes, top external IPs, trends, and needs-attention items.
+- Scalable ingestion: Tawny HTTP ingest, generic JSON, syslog/CEF, Windows Event/Sysmon, AWS CloudTrail, Azure sign-in/activity, Microsoft 365 audit, firewall/network logs, parser normalization, dead-letter tracking, and source health.
+- Connector catalog: cloud, identity, SaaS, network, endpoint, and generic connectors with required fields, credential references, safe local test actions, status, schedule, and redaction.
 - Alert Queue: severity, confidence, status, rule, source, host, user, process, MITRE, TI hits, assignee, filters, and bulk action controls.
 - Alert Detail: summary, evidence, raw JSON, threat intel matches, MITRE mapping, analyst timeline, and actions for case creation, Kelpie promotion, suppression, and response.
-- Incidents / Cases: native Tawny-SOC case grouping with priority, lifecycle, assignment, TLP/PAP, classification, observables, linked hosts, linked alerts, and Kelpie sync state.
-- Detection Rules: Sigma-style detection-as-code view with YAML import, metadata, test status, current revision, last-triggered state, and tuning actions.
-- Threat Intelligence: feed management and IOC browser for STIX, OpenIOC, CSV, TXT, MISP, OTX, URLhaus, and custom URL feeds.
+- Incidents / Cases: native Tawny-SOC case grouping with priority, lifecycle, assignment, TLP/PAP, classification, observables, linked hosts, linked alerts, SLA state, evidence records, and Kelpie sync state.
+- Detection Rules: Sigma-style detection-as-code view with working YAML import, metadata, ATT&CK mapping, test status, current revision, last-triggered state, scheduled detections, multi-event correlation helpers, and tuning actions.
+- Threat Intelligence: feed management and searchable, sortable, filterable, paginated IOC browser for STIX, OpenIOC, CSV, TXT, MISP, OTX, URLhaus, and custom URL feeds.
 - Playbooks: ordered SOC workflows for malware, suspicious PowerShell, new admin user, suspicious outbound IP, credential theft, host isolation, and suspicious URL style investigations.
-- Search / Hunt: YAAQL-powered workspace for event type, host, user, process, hash, IP, domain, time, and payload-path queries.
-- Integrations: email, Slack, webhook, Microsoft Sentinel, Wazuh, and Kelpie delivery state.
-- SOC Settings: severity mapping, routing rules, suppression, case numbering, SLAs, TI feeds, Kelpie sync, and role permissions.
+- Search / Hunt: YAAQL-powered enterprise hunt workspace for event type, host, user, process, hash, IP, domain, time, and payload-path queries, with examples, field pivots, saved searches, and clickable saved-search loading.
+- Integrations: email, Slack, webhook, Microsoft Sentinel, Wazuh, Kelpie, connector health, endpoint/token/credential configuration, delivery tests, and delivery state.
+- SOC Settings: split settings subpages for severity mapping, notification routing, suppression, threat intel TTL, case numbering, SLAs, role permissions, team access, API tokens, retention, compliance reports, and audit logs.
+- Access and authentication: BetterAuth sign-in/sign-up, team member administration under Settings, tenant invitations, magic-link invite flow, and MFA posture display.
+- API tokens: tenant-scoped API keys with role-limited scopes, create/update/revoke/delete workflows, and bearer-token access for ingest and read APIs.
+- Governance: RBAC checks, audit log records, evidence tracking, compliance report templates, hot/archive/delete retention policies, and scheduled threat intel/retention cron jobs.
 
 ## YAAQL Search Language
 
@@ -68,16 +82,13 @@ Configure Tawny with:
 }
 ```
 
-Set `TAWNY_SOC_INGEST_TOKEN` in this app and `Tawny:TawnySoc:ApiToken` in Tawny when you want bearer-token protection.
+For bearer-token protection, create a tenant API token in `Settings -> API tokens` with the `ingest:write` scope, then set `Tawny:TawnySoc:ApiToken` in Tawny. The legacy `TAWNY_SOC_INGEST_TOKEN` environment variable is still supported for simple local collector protection.
+
+`GET /api/events` accepts a session cookie or a bearer token with `events:read`. `GET /api/alerts` accepts a session cookie or a bearer token with `alerts:read`.
 
 ## Kelpie Integration
 
-Set:
-
-```bash
-KELPIE_BASE_URL=http://localhost:3000
-KELPIE_API_TOKEN=your-kelpie-token
-```
+Configure Kelpie from `Integrations`. The database-backed Kelpie settings include base URL, token reference, enablement, dedupe mode, and fields to sync.
 
 Tawny-SOC models Kelpie handoff with:
 
@@ -90,6 +101,39 @@ Tawny-SOC models Kelpie handoff with:
 ## Threat Intel Setup
 
 Threat intel feed concepts support STIX, OpenIOC, CSV, TXT, MISP, OTX, URLhaus, and custom URL feeds. IOC matches attach to alerts and cases, and the Hunt screen includes a retro-hunt action pattern for searching historical Tawny telemetry by indicator value.
+
+Starter feed endpoints seeded for local development:
+
+- Feodo Tracker Botnet C2 IPs, enabled
+- Spamhaus DROP Rogue Networks, enabled
+- CISA Known Exploited Vulnerabilities, enabled
+- OpenPhish Community Phishing URLs, enabled
+- PhishTank Online Valid Phishing URLs, paused by default because the public CSV dump is large and rate-limited
+- Emerging Threats Compromised IPs, paused by default
+- Blocklist.de Recent Attackers, paused by default
+
+Indicators loaded from feeds receive a configurable default TTL. The default is 7 days and can be changed in `Settings -> Threat intel`. Expired IOCs are excluded from the active indicator table and removed by the scheduled retention sweep.
+
+The Threat Intelligence page is backed by database filters and shows 100 active indicators per page. Search, type filter, source feed filter, sort, and pagination update the URL through Next client routing while the table data stays server-backed.
+
+## Settings And Administration
+
+The Settings root page is a categorized index with tabs for all, operations, access, integrations, and governance. Each settings area also has its own subpage under `/settings/[section]` so administration screens keep the main SOC layout and left navigation.
+
+Available settings sections:
+
+- Severity mapping
+- Notification routing
+- Suppression rules
+- Threat intel TTL
+- Case numbering
+- SLA rules
+- Role permissions
+- Team access
+- API tokens
+- Retention policies
+- Compliance reports
+- Audit log
 
 ## Playbook Model
 

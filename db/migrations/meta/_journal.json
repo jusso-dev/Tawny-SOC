@@ -36,6 +36,20 @@
       "when": 1780032000000,
       "tag": "0004_add_threat_intel_indicators",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1780033000000,
+      "tag": "0005_enterprise_must_haves",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1780034000000,
+      "tag": "0006_add_api_tokens",
+      "breakpoints": true
     }
   ]
 }

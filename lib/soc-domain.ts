@@ -2,11 +2,19 @@ import { playbooks } from "@/lib/rules";
 import { getSession } from "@/lib/session";
 import {
   getKelpieIntegration,
+  listAuditLogs,
+  listComplianceReports,
+  listConnectorCatalog,
+  listConnectorInstances,
   listAlerts,
   listDeliveryLog,
+  listEvidence,
   listEvents,
+  listIngestDeadLetters,
+  listIngestSources,
   listIncidents,
   listIntegrationChannels,
+  listRetentionPolicies,
   listSocSettings,
   listThreatIntelFeeds,
   listThreatIntelMatches,
@@ -79,7 +87,25 @@ export function extractAlertContext(alert: SocAlert, indicators: ThreatIntelMatc
 
 export async function getSocData() {
   const tenantId = await getCurrentTenantId();
-  const [alerts, events, incidents, rules, deliveries, feeds, indicators, kelpie, channels, settings] = await Promise.all([
+  const [
+    alerts,
+    events,
+    incidents,
+    rules,
+    deliveries,
+    feeds,
+    indicators,
+    kelpie,
+    channels,
+    settings,
+    ingestSources,
+    deadLetters,
+    connectors,
+    reports,
+    auditLogs,
+    retentionPolicies,
+    evidence,
+  ] = await Promise.all([
     listAlerts(),
     listEvents(),
     listIncidents(),
@@ -90,6 +116,13 @@ export async function getSocData() {
     getKelpieIntegration(tenantId),
     listIntegrationChannels(tenantId),
     listSocSettings(tenantId),
+    listIngestSources(tenantId),
+    listIngestDeadLetters(tenantId),
+    listConnectorInstances(tenantId),
+    listComplianceReports(tenantId),
+    listAuditLogs(tenantId),
+    listRetentionPolicies(tenantId),
+    listEvidence(tenantId),
   ]);
   const enrichedAlerts = alerts.map((alert) => extractAlertContext(alert, indicators)).sort((a, b) => severityRank[b.severity] - severityRank[a.severity] || Date.parse(b.timestamp) - Date.parse(a.timestamp));
   return {
@@ -102,6 +135,14 @@ export async function getSocData() {
     threatIntelFeeds: feeds,
     kelpieConfig: kelpie,
     integrationChannels: channels,
+    connectorCatalog: listConnectorCatalog(),
+    connectors,
+    ingestSources,
+    ingestDeadLetters: deadLetters,
+    complianceReports: reports,
+    auditLogs,
+    retentionPolicies,
+    evidence,
     settings,
     tenantId,
     deliveryLog: deliveries,

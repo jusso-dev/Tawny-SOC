@@ -2,13 +2,19 @@ import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { getConnectorDefinition } from "@/lib/connectors";
 import { db, schema } from "@/lib/db/client";
+import { complianceTemplates, requirePermission, type ComplianceFrameworkId, type RetentionTarget } from "@/lib/governance";
+import type { IngestionSourceType } from "@/lib/ingestion";
 import { getSession } from "@/lib/session";
 import {
   addIncidentTask,
   assignAlert,
   assignIncident,
+  createApiToken,
   createCaseForAlert,
+  deleteApiToken,
+  generateComplianceReport,
   getKelpieIntegration,
   getKelpieToken,
   listAlerts,
@@ -16,15 +22,24 @@ import {
   markIncidentKelpieStatus,
   recordDelivery,
   runPlaybookForIncident,
+  saveConnectorInstance,
   saveIntegrationChannel,
+  saveRetentionPolicy,
   saveKelpieIntegration,
   saveSearch,
   saveSocSetting,
+  syncEnabledThreatIntelFeeds,
+  testConnectorInstance,
   testIntegrationChannel,
   testThreatIntelFeed,
+  updateApiToken,
   updateAlertStatus,
   updateIncidentStatus,
+  upsertIngestSource,
   upsertThreatIntelFeed,
+  type ApiTokenRole,
+  type ApiTokenScope,
+  type ApiTokenStatus,
   type IntegrationChannelSetting,
   type SocActor,
 } from "@/lib/store";
@@ -35,6 +50,19 @@ import type { IntegrationDelivery, KelpieIntegrationConfig, ThreatIntelFeed } fr
 const validChannels: IntegrationDelivery["channel"][] = ["email", "slack", "webhook", "sentinel", "wazuh"];
 const validRoles = new Set(["member", "admin", "owner"]);
 const validFeedTypes: ThreatIntelFeed["type"][] = ["STIX", "OpenIOC", "CSV", "TXT", "MISP", "OTX", "URLhaus", "Custom URL"];
+const validApiTokenScopes = new Set<ApiTokenScope>([
+  "ingest:write",
+  "events:read",
+  "alerts:read",
+  "alerts:write",
+  "cases:read",
+  "cases:write",
+  "detections:read",
+  "detections:write",
+  "threat-intel:read",
+  "threat-intel:write",
+  "settings:read",
+]);
 
 export async function POST(request: Request) {
   const session = await getSession();
@@ -46,22 +74,27 @@ export async function POST(request: Request) {
 
   try {
     if (action === "assign-alert") {
+      requirePermission(actor.role, "alert.assign");
       await assignAlert(required(body.alertId, "alertId"), actor);
       return ok("Alert assigned.");
     }
     if (action === "dismiss-alert") {
+      requirePermission(actor.role, "alert.dismiss");
       await updateAlertStatus(required(body.alertId, "alertId"), "dismissed", actor);
       return ok("Alert dismissed.");
     }
     if (action === "suppress-alert") {
+      requirePermission(actor.role, "alert.suppress");
       await updateAlertStatus(required(body.alertId, "alertId"), "suppressed", actor, "Suppressed alert and matching rule context.");
       return ok("Alert suppressed.");
     }
     if (action === "create-case") {
+      requirePermission(actor.role, "case.write");
       const incident = await createCaseForAlert(required(body.alertId, "alertId"), actor);
       return ok(`Created ${incident.number}.`, { incidentId: incident.id });
     }
     if (action === "send-alert-kelpie") {
+      requirePermission(actor.role, "integration.write");
       const alertId = required(body.alertId, "alertId");
       const alert = (await listAlerts()).find((item) => item.id === alertId);
       if (!alert) throw new Error("Alert not found.");
@@ -72,22 +105,27 @@ export async function POST(request: Request) {
       return delivery.state === "delivered" ? ok("Sent alert to Kelpie.") : fail(delivery.error ?? "Kelpie delivery failed.", 400);
     }
     if (action === "assign-incident") {
+      requirePermission(actor.role, "case.write");
       await assignIncident(required(body.incidentId, "incidentId"), actor);
       return ok("Case assigned.");
     }
     if (action === "change-incident-state") {
+      requirePermission(actor.role, "case.write");
       await updateIncidentStatus(required(body.incidentId, "incidentId"), "investigating", actor);
       return ok("Case state changed.");
     }
     if (action === "add-task") {
+      requirePermission(actor.role, "case.write");
       await addIncidentTask(required(body.incidentId, "incidentId"), actor);
       return ok("Task added.");
     }
     if (action === "run-playbook") {
+      requirePermission(actor.role, "case.write");
       await runPlaybookForIncident(required(body.incidentId, "incidentId"), typeof body.playbookId === "string" ? body.playbookId : undefined, actor);
       return ok("Playbook tasks created.");
     }
     if (action === "sync-incident-kelpie" || action === "sync-comments") {
+      requirePermission(actor.role, "integration.write");
       await syncIncident(required(body.incidentId, "incidentId"), actor);
       return ok(action === "sync-comments" ? "Comments synced to Kelpie." : "Case synced to Kelpie.");
     }
@@ -103,6 +141,7 @@ export async function POST(request: Request) {
       return ok(`Synced ${incidents.length} stale case${incidents.length === 1 ? "" : "s"}.`);
     }
     if (action === "save-kelpie-config") {
+      requirePermission(actor.role, "integration.write");
       await saveKelpieIntegration({
         tenantId: actor.tenantId,
         baseUrl: optionalString(body.baseUrl),
@@ -113,6 +152,7 @@ export async function POST(request: Request) {
       return ok("Kelpie integration saved.");
     }
     if (action === "save-integration-channel" || action === "test-integration-channel") {
+      requirePermission(actor.role, "integration.write");
       const input = parseIntegrationChannel(body, actor.tenantId);
       if (action === "save-integration-channel") {
         await saveIntegrationChannel(input);
@@ -122,6 +162,7 @@ export async function POST(request: Request) {
       return ok(`${label(input.channel)} test delivered.`);
     }
     if (action === "add-threat-feed") {
+      requirePermission(actor.role, "integration.write");
       const name = required(body.name, "name");
       const type = typeof body.type === "string" && validFeedTypes.includes(body.type as ThreatIntelFeed["type"])
         ? body.type as ThreatIntelFeed["type"]
@@ -136,32 +177,123 @@ export async function POST(request: Request) {
       return ok(`Threat feed saved: ${name}.`);
     }
     if (action === "test-threat-feed") {
+      requirePermission(actor.role, "integration.write");
       const count = await testThreatIntelFeed(required(body.feedId, "feedId"), actor.tenantId);
       return ok(`Threat feed tested and loaded ${count.toLocaleString()} indicator${count === 1 ? "" : "s"}.`);
     }
+    if (action === "sync-enabled-threat-feeds") {
+      requirePermission(actor.role, "integration.write");
+      const results = await syncEnabledThreatIntelFeeds(actor.tenantId);
+      const loaded = results.reduce((total, result) => total + result.count, 0);
+      return ok(`Synced ${results.length} feed${results.length === 1 ? "" : "s"} and loaded ${loaded.toLocaleString()} indicators.`);
+    }
     if (action === "save-soc-setting") {
+      requirePermission(actor.role, "settings.write");
       const settingKey = required(body.settingKey, "settingKey");
       if (!isRecord(body.values)) throw new Error("values must be an object.");
       await saveSocSetting(actor.tenantId, settingKey, body.values);
       return ok("Setting saved.");
     }
+    if (action === "save-ingest-source") {
+      requirePermission(actor.role, "integration.write");
+      const id = await upsertIngestSource({
+        tenantId: actor.tenantId,
+        name: required(body.name, "name"),
+        sourceType: parseSourceType(body.sourceType),
+        authMode: optionalString(body.authMode) || "shared-secret",
+        parser: optionalString(body.parser) || "generic-json",
+      });
+      return ok("Ingestion source saved.", { sourceId: id });
+    }
+    if (action === "save-connector" || action === "test-connector") {
+      requirePermission(actor.role, "integration.write");
+      const catalogId = required(body.catalogId, "catalogId");
+      if (action === "save-connector") {
+        const id = await saveConnectorInstance({
+          tenantId: actor.tenantId,
+          catalogId,
+          name: optionalString(body.name),
+          enabled: Boolean(body.enabled),
+          schedule: optionalString(body.schedule) || "manual",
+          config: parseConnectorConfig(body),
+          credential: optionalString(body.credential),
+        });
+        return ok("Connector saved.", { connectorId: id });
+      }
+      await testConnectorInstance(actor.tenantId, catalogId);
+      return ok("Connector configuration passed validation.");
+    }
+    if (action === "generate-compliance-report") {
+      requirePermission(actor.role, "report.export");
+      const framework = parseComplianceFramework(body.framework);
+      const id = await generateComplianceReport(actor.tenantId, framework, actor);
+      return ok("Compliance report generated.", { reportId: id });
+    }
+    if (action === "save-retention-policy") {
+      requirePermission(actor.role, "settings.write");
+      await saveRetentionPolicy(actor.tenantId, {
+        target: parseRetentionTarget(body.target),
+        hotDays: clampDays(body.hotDays, 1, 3650),
+        archiveDays: clampDays(body.archiveDays, 1, 3650),
+        deleteAfterDays: clampDays(body.deleteAfterDays, 1, 3650),
+        preserveCaseEvidence: Boolean(body.preserveCaseEvidence),
+        legalHold: Boolean(body.legalHold),
+      });
+      return ok("Retention policy saved.");
+    }
+    if (action === "create-api-token") {
+      requirePermission(actor.role, "settings.write");
+      const result = await createApiToken({
+        tenantId: actor.tenantId,
+        name: required(body.name, "name"),
+        role: parseApiTokenRole(body.role),
+        scopes: parseApiTokenScopes(body.scopes),
+        expiresAt: parseOptionalDate(body.expiresAt),
+        actor,
+      });
+      return ok("API token created. Copy the secret now.", { token: result.token, tokenId: result.record.id, tokenPrefix: result.record.tokenPrefix });
+    }
+    if (action === "update-api-token") {
+      requirePermission(actor.role, "settings.write");
+      await updateApiToken({
+        tenantId: actor.tenantId,
+        tokenId: required(body.tokenId, "tokenId"),
+        name: required(body.name, "name"),
+        role: parseApiTokenRole(body.role),
+        scopes: parseApiTokenScopes(body.scopes),
+        status: parseApiTokenStatus(body.status),
+        expiresAt: parseOptionalDate(body.expiresAt),
+        actor,
+      });
+      return ok("API token updated.");
+    }
+    if (action === "delete-api-token") {
+      requirePermission(actor.role, "settings.write");
+      await deleteApiToken(actor.tenantId, required(body.tokenId, "tokenId"), actor);
+      return ok("API token deleted.");
+    }
     if (action === "invite-user") {
+      requirePermission(actor.role, "user.admin");
       await inviteUser(request, body, actor);
       return ok("Invitation created and magic link sent.");
     }
     if (action === "add-user") {
+      requirePermission(actor.role, "user.admin");
       await addExistingUser(body, actor);
       return ok("User added to the tenant.");
     }
     if (action === "import-sigma") {
+      requirePermission(actor.role, "detection.write");
       const rule = await importSigmaRule(required(body.sigma, "sigma"));
       return ok(`Imported ${rule.title}.`);
     }
     if (action === "duplicate-rule") {
+      requirePermission(actor.role, "detection.write");
       const rule = await duplicateSigmaRule(required(body.ruleId, "ruleId"));
       return ok(`Duplicated ${rule.title}.`);
     }
     if (action === "disable-rule") {
+      requirePermission(actor.role, "detection.write");
       await disableSigmaRule(required(body.ruleId, "ruleId"));
       return ok("Rule disabled.");
     }
@@ -178,7 +310,10 @@ export async function POST(request: Request) {
 async function resolveActor(session: NonNullable<Awaited<ReturnType<typeof getSession>>>): Promise<SocActor> {
   const activeOrganizationId = (session.session as { activeOrganizationId?: string | null }).activeOrganizationId;
   if (activeOrganizationId) {
-    return { id: session.user.id, name: session.user.name || session.user.email, tenantId: activeOrganizationId };
+    const [membership] = await db.select().from(schema.member)
+      .where(and(eq(schema.member.userId, session.user.id), eq(schema.member.organizationId, activeOrganizationId)))
+      .limit(1);
+    return { id: session.user.id, name: session.user.name || session.user.email, tenantId: activeOrganizationId, role: membership?.role ?? "member" };
   }
 
   const [membership] = await db.select().from(schema.member).where(eq(schema.member.userId, session.user.id)).limit(1);
@@ -186,6 +321,7 @@ async function resolveActor(session: NonNullable<Awaited<ReturnType<typeof getSe
     id: session.user.id,
     name: session.user.name || session.user.email,
     tenantId: membership?.organizationId ?? "local-tenant",
+    role: membership?.role ?? "member",
   };
 }
 
@@ -314,9 +450,85 @@ function parseIntegrationChannel(body: Record<string, unknown>, tenantId: string
   };
 }
 
+function parseSourceType(value: unknown): IngestionSourceType {
+  const aliases: Record<string, IngestionSourceType> = {
+    "generic-json": "generic_json",
+    "generic_json": "generic_json",
+    "syslog-cef": "cef",
+    "syslog": "syslog",
+    "cef": "cef",
+    "windows-sysmon": "sysmon",
+    "windows_event": "windows_event",
+    "sysmon": "sysmon",
+    "aws-cloudtrail": "aws_cloudtrail",
+    "aws_cloudtrail": "aws_cloudtrail",
+    "azure-entra": "azure_signin",
+    "azure_signin": "azure_signin",
+    "azure_activity": "azure_activity",
+    "microsoft-365": "microsoft365_audit",
+    "microsoft365_audit": "microsoft365_audit",
+    "firewall": "firewall",
+  };
+  const sourceType = typeof value === "string" ? aliases[value] : undefined;
+  return sourceType ?? "generic_json";
+}
+
+function parseConnectorConfig(body: Record<string, unknown>) {
+  const config: Record<string, unknown> = {};
+  const item = typeof body.catalogId === "string" ? getConnectorDefinition(body.catalogId) : undefined;
+  if (!item) return config;
+  for (const field of [...item.requiredFields, ...item.optionalFields]) {
+    const value = body[field.key];
+    if (typeof value === "string" && value.trim()) config[field.key] = value.trim();
+  }
+  return config;
+}
+
+function parseComplianceFramework(value: unknown): ComplianceFrameworkId {
+  const id = typeof value === "string" ? value : "";
+  if (complianceTemplates.some((template) => template.id === id)) return id as ComplianceFrameworkId;
+  throw new Error("Unsupported compliance framework.");
+}
+
+function parseRetentionTarget(value: unknown): RetentionTarget {
+  const id = typeof value === "string" ? value : "";
+  const allowed = new Set(["events", "alerts", "cases", "audit", "threatIntel", "integrationLogs"]);
+  if (allowed.has(id)) return id as RetentionTarget;
+  throw new Error("Unsupported retention target.");
+}
+
+function clampDays(value: unknown, min: number, max: number) {
+  const days = Number(value);
+  if (!Number.isFinite(days)) return min;
+  return Math.min(max, Math.max(min, Math.round(days)));
+}
+
 function parseRole(value: unknown) {
   const role = typeof value === "string" && validRoles.has(value) ? value : "member";
   return role;
+}
+
+function parseApiTokenRole(value: unknown): ApiTokenRole {
+  return value === "owner" || value === "admin" || value === "member" ? value : "member";
+}
+
+function parseApiTokenStatus(value: unknown): ApiTokenStatus {
+  return value === "revoked" ? "revoked" : "active";
+}
+
+function parseApiTokenScopes(value: unknown): ApiTokenScope[] {
+  const raw = Array.isArray(value) ? value : typeof value === "string" ? value.split(",") : [];
+  return raw
+    .map((scope) => typeof scope === "string" ? scope.trim() : "")
+    .filter((scope): scope is ApiTokenScope => validApiTokenScopes.has(scope as ApiTokenScope))
+    .filter((scope, index, all) => all.indexOf(scope) === index);
+}
+
+function parseOptionalDate(value: unknown) {
+  if (typeof value !== "string" || !value.trim()) return null;
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) throw new Error("Expiry date is invalid.");
+  return date;
 }
 
 function parseStringList(value: unknown) {

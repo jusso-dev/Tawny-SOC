@@ -22,6 +22,14 @@ const jobDefinitions = [
       await deleteExpiredThreatIntelIndicators();
     },
   },
+  {
+    name: "threat-intel-feed-sync",
+    schedule: "45 * * * *",
+    run: async () => {
+      const { syncEnabledThreatIntelFeeds } = await import("@/lib/store");
+      await syncEnabledThreatIntelFeeds();
+    },
+  },
 ];
 
 export function startCronJobs() {

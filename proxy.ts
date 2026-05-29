@@ -6,6 +6,8 @@ const PUBLIC_PATHS = ["/sign-in", "/sign-up", "/mfa"];
 function isPublic(pathname: string) {
   if (pathname.startsWith("/api/auth")) return true;
   if (pathname.startsWith("/api/ingest/tawny")) return true;
+  if (pathname.startsWith("/api/alerts")) return true;
+  if (pathname.startsWith("/api/events")) return true;
   if (pathname.startsWith("/_next")) return true;
   if (pathname.startsWith("/favicon")) return true;
   return PUBLIC_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`));

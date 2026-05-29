@@ -5,7 +5,7 @@ export type KelpieSyncStatus = "not_synced" | "synced" | "failed" | "stale" | "c
 
 export type SocEvent = {
   id: string;
-  source: "tawny" | "manual";
+  source: "tawny" | "manual" | "connector" | "cloud" | "identity" | "network" | "saas";
   kind: "alert" | "telemetry";
   title: string;
   severity: Severity;

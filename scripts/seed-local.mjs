@@ -31,6 +31,20 @@ const starterThreatFeeds = [
     enabled: true,
   },
   {
+    id: `feed-${tenantId}-starter-openphish-community-phishing-urls`,
+    name: "Starter: OpenPhish Community Phishing URLs",
+    type: "TXT",
+    url: "https://raw.githubusercontent.com/openphish/public_feed/refs/heads/main/feed.txt",
+    enabled: true,
+  },
+  {
+    id: `feed-${tenantId}-starter-phishtank-online-valid-phishing-urls`,
+    name: "Starter: PhishTank Online Valid Phishing URLs",
+    type: "CSV",
+    url: "https://data.phishtank.com/data/online-valid.csv",
+    enabled: false,
+  },
+  {
     id: `feed-${tenantId}-starter-emerging-threats-compromised-ips`,
     name: "Starter: Emerging Threats Compromised IPs",
     type: "TXT",

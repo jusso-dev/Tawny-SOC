@@ -1,10 +1,20 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { createHash, randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { isIP } from "node:net";
 import path from "node:path";
-import { and, desc, eq, gt, inArray, isNull, lt, or } from "drizzle-orm";
+import { and, asc, count, desc, eq, gt, ilike, inArray, isNull, lt, or, sql, type SQL } from "drizzle-orm";
+import { allowedApiTokenScopesForRole, type ApiTokenRole, type ApiTokenScope, type ApiTokenStatus } from "@/lib/api-token-policy";
+import {
+  getConnectorDefinition,
+  listConnectorCatalog as listConnectorDefinitions,
+  redactConnectorConfig as redactConnectorSecrets,
+  validateConnectorConfig,
+  type ConnectorCatalogItem,
+} from "@/lib/connectors";
 import { matchRules, normalizeSeverity, topSeverity, triageSummary } from "@/lib/detection";
 import { db, schema } from "@/lib/db/client";
+import { complianceTemplates, type ComplianceFrameworkId, type RetentionPolicy } from "@/lib/governance";
+import type { IngestionSourceType } from "@/lib/ingestion";
 import { listSigmaRules } from "@/lib/sigma";
 import { createIncidentFromAlert } from "@/lib/soc-workflows";
 import { playbooks } from "@/lib/rules";
@@ -22,6 +32,9 @@ import type {
   ThreatIntelMatch,
 } from "@/lib/types";
 
+export { allowedApiTokenScopesForRole, apiTokenScopes } from "@/lib/api-token-policy";
+export type { ApiTokenRole, ApiTokenScope, ApiTokenStatus } from "@/lib/api-token-policy";
+
 const runtimeDir = path.join(process.cwd(), "data", "runtime");
 const eventsPath = path.join(runtimeDir, "events.json");
 const alertsPath = path.join(runtimeDir, "alerts.json");
@@ -35,9 +48,147 @@ export type IntegrationChannelSetting = {
   credentialConfigured: boolean;
 };
 
+export type IngestSourceSetting = {
+  id: string;
+  tenantId: string;
+  name: string;
+  sourceType: string;
+  authMode: string;
+  parser: string;
+  status: string;
+  lastSeenAt?: string;
+  lastError?: string;
+  throughput: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type IngestDeadLetter = {
+  id: string;
+  tenantId: string;
+  sourceId?: string;
+  reason: string;
+  payload: unknown;
+  status: string;
+  receivedAt: string;
+};
+
+export type ConnectorInstance = {
+  id: string;
+  tenantId: string;
+  catalogId: string;
+  provider: string;
+  category: string;
+  name: string;
+  authType: string;
+  status: string;
+  enabled: boolean;
+  schedule: string;
+  config: Record<string, unknown>;
+  credentialConfigured: boolean;
+  lastTestAt?: string;
+  lastSyncAt?: string;
+  lastError?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ComplianceReportRecord = {
+  id: string;
+  tenantId: string;
+  framework: string;
+  title: string;
+  status: string;
+  schedule: string;
+  evidence: string[];
+  generatedAt?: string;
+  createdAt: string;
+};
+
+export type AuditLogRecord = {
+  id: string;
+  tenantId: string;
+  actorId?: string;
+  actorName?: string;
+  action: string;
+  resourceType: string;
+  resourceId?: string;
+  detail?: string;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+};
+
+export type EvidenceRecord = {
+  id: string;
+  tenantId: string;
+  incidentId?: string;
+  alertId?: string;
+  evidenceType: string;
+  title: string;
+  sourceRef?: string;
+  checksum?: string;
+  metadata: Record<string, unknown>;
+  createdBy: string;
+  createdAt: string;
+};
+
+export type ApiTokenRecord = {
+  id: string;
+  tenantId: string;
+  name: string;
+  tokenPrefix: string;
+  role: ApiTokenRole;
+  scopes: ApiTokenScope[];
+  status: ApiTokenStatus;
+  lastUsedAt?: string;
+  expiresAt?: string;
+  createdBy?: string;
+  createdAt: string;
+  updatedAt: string;
+  revokedAt?: string;
+};
+
+export type ThreatIntelSortKey = "value" | "type" | "sourceFeed" | "confidence" | "firstSeen" | "lastSeen" | "expiresAt";
+export type ThreatIntelSortDirection = "asc" | "desc";
+
+export type ThreatIntelPageInput = {
+  direction?: ThreatIntelSortDirection;
+  page?: number;
+  pageSize?: number;
+  search?: string;
+  sort?: ThreatIntelSortKey;
+  sourceFeed?: string;
+  type?: ThreatIntelMatch["type"] | "";
+};
+
+export type ThreatIntelIndicatorPage = {
+  indicators: ThreatIntelMatch[];
+  direction: ThreatIntelSortDirection;
+  page: number;
+  pageSize: number;
+  search: string;
+  sort: ThreatIntelSortKey;
+  sourceFeed: string;
+  total: number;
+  totalPages: number;
+  type: ThreatIntelMatch["type"] | "";
+};
+
 export type SocSettings = {
   severity: { critical: string; high: string; medium: string; low: string };
-  routing: { criticalChannel: string; highChannel: string; defaultAssignee: string };
+  routing: {
+    criticalChannel: string;
+    highChannel: string;
+    defaultAssignee: string;
+    criticalChannels: IntegrationDelivery["channel"][];
+    highChannels: IntegrationDelivery["channel"][];
+    mediumChannels: IntegrationDelivery["channel"][];
+    lowChannels: IntegrationDelivery["channel"][];
+    caseCreationSeverity: "critical" | "high" | "medium" | "disabled";
+    quietHoursEnabled: boolean;
+    quietHoursStart: string;
+    quietHoursEnd: string;
+  };
   suppression: { defaultExpiryHours: number; requireReason: boolean };
   caseNumbering: { prefix: string; nextNumber: number };
   sla: { criticalMinutes: number; highMinutes: number; mediumMinutes: number };
@@ -47,13 +198,34 @@ export type SocSettings = {
 
 const socSettingsDefaults: SocSettings = {
   severity: { critical: "P1", high: "P2", medium: "P3", low: "P4" },
-  routing: { criticalChannel: "", highChannel: "", defaultAssignee: "" },
+  routing: {
+    criticalChannel: "",
+    highChannel: "",
+    defaultAssignee: "",
+    criticalChannels: ["slack", "email"],
+    highChannels: ["slack"],
+    mediumChannels: ["email"],
+    lowChannels: [],
+    caseCreationSeverity: "critical",
+    quietHoursEnabled: false,
+    quietHoursStart: "18:00",
+    quietHoursEnd: "08:00",
+  },
   suppression: { defaultExpiryHours: 24, requireReason: true },
   caseNumbering: { prefix: "SOC", nextNumber: 1 },
   sla: { criticalMinutes: 30, highMinutes: 120, mediumMinutes: 480 },
   permissions: { dismissRole: "member", suppressRole: "owner", kelpieRole: "owner" },
   threatIntel: { defaultTtlDays: 7 },
 };
+
+const retentionPolicyDefaults: RetentionPolicy[] = [
+  { target: "events", hotDays: 30, archiveDays: 180, deleteAfterDays: 365, preserveCaseEvidence: true, legalHold: false },
+  { target: "alerts", hotDays: 60, archiveDays: 365, deleteAfterDays: 730, preserveCaseEvidence: true, legalHold: false },
+  { target: "cases", hotDays: 365, archiveDays: 1095, deleteAfterDays: 2555, preserveCaseEvidence: true, legalHold: false },
+  { target: "audit", hotDays: 365, archiveDays: 1095, deleteAfterDays: 2555, preserveCaseEvidence: true, legalHold: false },
+  { target: "threatIntel", hotDays: 7, archiveDays: 30, deleteAfterDays: 90, preserveCaseEvidence: true, legalHold: false },
+  { target: "integrationLogs", hotDays: 30, archiveDays: 180, deleteAfterDays: 365, preserveCaseEvidence: true, legalHold: false },
+];
 
 async function readJson<T>(filePath: string, fallback: T): Promise<T> {
   try {
@@ -148,6 +320,120 @@ function fromDbDelivery(row: typeof schema.socDeliveryLog.$inferSelect): Integra
     lastAttemptAt: row.lastAttemptAt.toISOString(),
     error: row.error ?? undefined,
     externalRef: row.externalRef ?? undefined,
+  };
+}
+
+function fromDbIngestSource(row: typeof schema.socIngestSource.$inferSelect): IngestSourceSetting {
+  return {
+    id: row.id,
+    tenantId: row.tenantId,
+    name: row.name,
+    sourceType: row.sourceType,
+    authMode: row.authMode,
+    parser: row.parser,
+    status: row.status,
+    lastSeenAt: row.lastSeenAt?.toISOString(),
+    lastError: row.lastError ?? undefined,
+    throughput: row.throughput,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
+function fromDbDeadLetter(row: typeof schema.socIngestDeadLetter.$inferSelect): IngestDeadLetter {
+  return {
+    id: row.id,
+    tenantId: row.tenantId,
+    sourceId: row.sourceId ?? undefined,
+    reason: row.reason,
+    payload: row.payload,
+    status: row.status,
+    receivedAt: row.receivedAt.toISOString(),
+  };
+}
+
+function fromDbConnector(row: typeof schema.socConnector.$inferSelect): ConnectorInstance {
+  return {
+    id: row.id,
+    tenantId: row.tenantId,
+    catalogId: row.catalogId,
+    provider: row.provider,
+    category: row.category,
+    name: row.name,
+    authType: row.authType,
+    status: row.status,
+    enabled: row.enabled,
+    schedule: row.schedule,
+    config: row.config,
+    credentialConfigured: Boolean(row.credentialReference),
+    lastTestAt: row.lastTestAt?.toISOString(),
+    lastSyncAt: row.lastSyncAt?.toISOString(),
+    lastError: row.lastError ?? undefined,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
+function fromDbReport(row: typeof schema.socReport.$inferSelect): ComplianceReportRecord {
+  return {
+    id: row.id,
+    tenantId: row.tenantId,
+    framework: row.framework,
+    title: row.title,
+    status: row.status,
+    schedule: row.schedule,
+    evidence: row.evidence,
+    generatedAt: row.generatedAt?.toISOString(),
+    createdAt: row.createdAt.toISOString(),
+  };
+}
+
+function fromDbAudit(row: typeof schema.socAuditLog.$inferSelect): AuditLogRecord {
+  return {
+    id: row.id,
+    tenantId: row.tenantId,
+    actorId: row.actorId ?? undefined,
+    actorName: row.actorName ?? undefined,
+    action: row.action,
+    resourceType: row.resourceType,
+    resourceId: row.resourceId ?? undefined,
+    detail: row.detail ?? undefined,
+    metadata: row.metadata,
+    createdAt: row.createdAt.toISOString(),
+  };
+}
+
+function fromDbEvidence(row: typeof schema.socEvidence.$inferSelect): EvidenceRecord {
+  return {
+    id: row.id,
+    tenantId: row.tenantId,
+    incidentId: row.incidentId ?? undefined,
+    alertId: row.alertId ?? undefined,
+    evidenceType: row.evidenceType,
+    title: row.title,
+    sourceRef: row.sourceRef ?? undefined,
+    checksum: row.checksum ?? undefined,
+    metadata: row.metadata,
+    createdBy: row.createdBy,
+    createdAt: row.createdAt.toISOString(),
+  };
+}
+
+function fromDbApiToken(row: typeof schema.socApiToken.$inferSelect): ApiTokenRecord {
+  return {
+    id: row.id,
+    tenantId: row.tenantId,
+    name: row.name,
+    tokenPrefix: row.tokenPrefix,
+    role: normalizeApiTokenRole(row.role),
+    scopes: normalizeApiTokenScopes(row.scopes, normalizeApiTokenRole(row.role)),
+    status: row.status === "revoked" ? "revoked" : "active",
+    lastUsedAt: row.lastUsedAt?.toISOString(),
+    expiresAt: row.expiresAt?.toISOString(),
+    createdBy: row.createdBy ?? undefined,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+    revokedAt: row.revokedAt?.toISOString(),
   };
 }
 
@@ -272,6 +558,386 @@ export async function listDeliveryLog() {
   }
 }
 
+export async function listIngestSources(tenantId: string) {
+  try {
+    const rows = await db.select().from(schema.socIngestSource)
+      .where(eq(schema.socIngestSource.tenantId, tenantId))
+      .orderBy(desc(schema.socIngestSource.updatedAt));
+    return rows.map(fromDbIngestSource);
+  } catch {
+    return [];
+  }
+}
+
+export async function upsertIngestSource(input: {
+  tenantId: string;
+  name: string;
+  sourceType: IngestionSourceType;
+  authMode: string;
+  parser: string;
+}) {
+  const id = `source-${input.tenantId}-${slugify(input.name)}`;
+  const now = new Date();
+  await db.insert(schema.socIngestSource).values({
+    id,
+    tenantId: input.tenantId,
+    name: input.name,
+    sourceType: input.sourceType,
+    authMode: input.authMode,
+    parser: input.parser,
+    status: "untested",
+    throughput: 0,
+    createdAt: now,
+    updatedAt: now,
+  }).onConflictDoUpdate({
+    target: schema.socIngestSource.id,
+    set: {
+      name: input.name,
+      sourceType: input.sourceType,
+      authMode: input.authMode,
+      parser: input.parser,
+      updatedAt: now,
+    },
+  });
+  return id;
+}
+
+export async function listIngestDeadLetters(tenantId: string) {
+  try {
+    const rows = await db.select().from(schema.socIngestDeadLetter)
+      .where(eq(schema.socIngestDeadLetter.tenantId, tenantId))
+      .orderBy(desc(schema.socIngestDeadLetter.receivedAt))
+      .limit(100);
+    return rows.map(fromDbDeadLetter);
+  } catch {
+    return [];
+  }
+}
+
+export function listConnectorCatalog(): ConnectorCatalogItem[] {
+  return listConnectorDefinitions();
+}
+
+export async function listConnectorInstances(tenantId: string) {
+  try {
+    const rows = await db.select().from(schema.socConnector)
+      .where(eq(schema.socConnector.tenantId, tenantId))
+      .orderBy(desc(schema.socConnector.updatedAt));
+    return rows.map(fromDbConnector);
+  } catch {
+    return [];
+  }
+}
+
+export async function saveConnectorInstance(input: {
+  tenantId: string;
+  catalogId: string;
+  name?: string;
+  enabled: boolean;
+  schedule: string;
+  config: Record<string, unknown>;
+  credential?: string;
+}) {
+  const catalogItem = getConnectorDefinition(input.catalogId);
+  if (!catalogItem) throw new Error("Connector catalog item not found.");
+  const id = `connector-${input.tenantId}-${catalogItem.id}`;
+  const existing = await db.select().from(schema.socConnector).where(eq(schema.socConnector.id, id)).limit(1);
+  const now = new Date();
+  await db.insert(schema.socConnector).values({
+    id,
+    tenantId: input.tenantId,
+    catalogId: catalogItem.id,
+    provider: catalogItem.provider,
+    category: catalogItem.categories[0] ?? "generic",
+    name: input.name?.trim() || catalogItem.name,
+    authType: catalogItem.authType,
+    status: "untested",
+    enabled: input.enabled,
+    schedule: input.schedule || "manual",
+    config: redactConnectorSecrets(input.catalogId, input.config),
+    credentialReference: input.credential?.trim() || existing[0]?.credentialReference || null,
+    createdAt: now,
+    updatedAt: now,
+  }).onConflictDoUpdate({
+    target: schema.socConnector.id,
+    set: {
+      name: input.name?.trim() || catalogItem.name,
+      enabled: input.enabled,
+      schedule: input.schedule || "manual",
+      config: redactConnectorSecrets(input.catalogId, input.config),
+      credentialReference: input.credential?.trim() || existing[0]?.credentialReference || null,
+      updatedAt: now,
+    },
+  });
+  return id;
+}
+
+export async function testConnectorInstance(tenantId: string, catalogId: string) {
+  const id = `connector-${tenantId}-${catalogId}`;
+  const [connector] = await db.select().from(schema.socConnector).where(eq(schema.socConnector.id, id)).limit(1);
+  if (!connector || connector.tenantId !== tenantId) throw new Error("Connector is not configured.");
+  const now = new Date();
+  const missing = requiredConnectorFields(connector.catalogId, connector.config, connector.credentialReference ?? undefined);
+  const status = missing.length ? "failed" : "healthy";
+  const lastError = missing.length ? `Missing required fields: ${missing.join(", ")}` : null;
+  await db.update(schema.socConnector).set({ status, lastTestAt: now, lastError, updatedAt: now }).where(eq(schema.socConnector.id, id));
+  if (lastError) throw new Error(lastError);
+}
+
+export async function listComplianceReports(tenantId: string) {
+  try {
+    const rows = await db.select().from(schema.socReport)
+      .where(eq(schema.socReport.tenantId, tenantId))
+      .orderBy(desc(schema.socReport.createdAt))
+      .limit(100);
+    return rows.map(fromDbReport);
+  } catch {
+    return [];
+  }
+}
+
+export async function generateComplianceReport(tenantId: string, framework: ComplianceFrameworkId, actor: SocActor) {
+  const template = complianceTemplates.find((item) => item.id === framework);
+  if (!template) throw new Error("Unknown report framework.");
+  const now = new Date();
+  const report = {
+    id: `report-${tenantId}-${framework}-${now.getTime()}`,
+    tenantId,
+    framework,
+    title: `${template.name} evidence report`,
+    status: "generated",
+    schedule: "manual",
+    evidence: template.evidence,
+    generatedAt: now,
+    createdAt: now,
+  };
+  await db.insert(schema.socReport).values(report);
+  await recordAuditLog({
+    tenantId,
+    actor,
+    action: "generated_report",
+    resourceType: "report",
+    resourceId: report.id,
+    detail: `Generated ${template.name} report.`,
+  });
+  return report.id;
+}
+
+export async function listRetentionPolicies(tenantId: string): Promise<RetentionPolicy[]> {
+  try {
+    const rows = await db.select().from(schema.socRetentionPolicy).where(eq(schema.socRetentionPolicy.tenantId, tenantId));
+    const existing = new Map(rows.map((row) => [row.target, row]));
+    return retentionPolicyDefaults.map((defaults) => {
+      const row = existing.get(defaults.target);
+      return row ? {
+        target: row.target as RetentionPolicy["target"],
+        hotDays: row.hotDays,
+        archiveDays: row.archiveDays,
+        deleteAfterDays: row.deleteAfterDays,
+        preserveCaseEvidence: row.preserveCaseEvidence,
+        legalHold: row.legalHold,
+      } : defaults;
+    });
+  } catch {
+    return retentionPolicyDefaults;
+  }
+}
+
+export async function saveRetentionPolicy(tenantId: string, policy: RetentionPolicy) {
+  await db.insert(schema.socRetentionPolicy).values({
+    id: `retention-${tenantId}-${policy.target}`,
+    tenantId,
+    target: policy.target,
+    hotDays: policy.hotDays,
+    archiveDays: policy.archiveDays,
+    deleteAfterDays: policy.deleteAfterDays,
+    preserveCaseEvidence: policy.preserveCaseEvidence,
+    legalHold: policy.legalHold,
+    updatedAt: new Date(),
+  }).onConflictDoUpdate({
+    target: [schema.socRetentionPolicy.tenantId, schema.socRetentionPolicy.target],
+    set: {
+      hotDays: policy.hotDays,
+      archiveDays: policy.archiveDays,
+      deleteAfterDays: policy.deleteAfterDays,
+      preserveCaseEvidence: policy.preserveCaseEvidence,
+      legalHold: policy.legalHold,
+      updatedAt: new Date(),
+    },
+  });
+}
+
+export async function listAuditLogs(tenantId: string) {
+  try {
+    const rows = await db.select().from(schema.socAuditLog)
+      .where(eq(schema.socAuditLog.tenantId, tenantId))
+      .orderBy(desc(schema.socAuditLog.createdAt))
+      .limit(100);
+    return rows.map(fromDbAudit);
+  } catch {
+    return [];
+  }
+}
+
+export async function recordAuditLog(input: {
+  tenantId: string;
+  action: string;
+  resourceType: string;
+  actor?: SocActor;
+  resourceId?: string;
+  detail?: string;
+  metadata?: Record<string, unknown>;
+}) {
+  await db.insert(schema.socAuditLog).values({
+    id: `audit-${randomUUID()}`,
+    tenantId: input.tenantId,
+    actorId: input.actor?.id,
+    actorName: input.actor?.name,
+    action: input.action,
+    resourceType: input.resourceType,
+    resourceId: input.resourceId,
+    detail: input.detail,
+    metadata: input.metadata ?? {},
+    createdAt: new Date(),
+  });
+}
+
+export async function listEvidence(tenantId: string, incidentId?: string) {
+  try {
+    const where = incidentId
+      ? and(eq(schema.socEvidence.tenantId, tenantId), eq(schema.socEvidence.incidentId, incidentId))
+      : eq(schema.socEvidence.tenantId, tenantId);
+    const rows = await db.select().from(schema.socEvidence).where(where).orderBy(desc(schema.socEvidence.createdAt)).limit(100);
+    return rows.map(fromDbEvidence);
+  } catch {
+    return [];
+  }
+}
+
+export async function listApiTokens(tenantId: string) {
+  try {
+    const rows = await db.select().from(schema.socApiToken)
+      .where(eq(schema.socApiToken.tenantId, tenantId))
+      .orderBy(desc(schema.socApiToken.createdAt));
+    return rows.map(fromDbApiToken);
+  } catch {
+    return [];
+  }
+}
+
+export async function createApiToken(input: {
+  tenantId: string;
+  name: string;
+  role: ApiTokenRole;
+  scopes: ApiTokenScope[];
+  expiresAt?: Date | null;
+  actor?: SocActor;
+}) {
+  const role = normalizeApiTokenRole(input.role);
+  const scopes = normalizeApiTokenScopes(input.scopes, role);
+  if (!scopes.length) throw new Error("Select at least one scope allowed for the role.");
+  const secret = `tawny_${randomBytes(24).toString("base64url")}`;
+  const now = new Date();
+  const values = {
+    id: `token-${randomUUID()}`,
+    tenantId: input.tenantId,
+    name: input.name.trim(),
+    tokenHash: hashApiToken(secret),
+    tokenPrefix: tokenPrefix(secret),
+    role,
+    scopes,
+    status: "active",
+    expiresAt: input.expiresAt ?? null,
+    createdBy: input.actor?.id,
+    createdAt: now,
+    updatedAt: now,
+  };
+  if (!values.name) throw new Error("Token name is required.");
+  const [row] = await db.insert(schema.socApiToken).values(values).returning();
+  if (input.actor) {
+    await recordAuditLog({
+      tenantId: input.tenantId,
+      actor: input.actor,
+      action: "created_api_token",
+      resourceType: "api_token",
+      resourceId: row.id,
+      detail: `Created API token ${row.name}.`,
+      metadata: { scopes, role },
+    });
+  }
+  return { token: secret, record: fromDbApiToken(row) };
+}
+
+export async function updateApiToken(input: {
+  tenantId: string;
+  tokenId: string;
+  name: string;
+  role: ApiTokenRole;
+  scopes: ApiTokenScope[];
+  status: ApiTokenStatus;
+  expiresAt?: Date | null;
+  actor?: SocActor;
+}) {
+  const [existing] = await db.select().from(schema.socApiToken)
+    .where(and(eq(schema.socApiToken.id, input.tokenId), eq(schema.socApiToken.tenantId, input.tenantId)))
+    .limit(1);
+  if (!existing) throw new Error("API token not found.");
+  const role = normalizeApiTokenRole(input.role);
+  const scopes = normalizeApiTokenScopes(input.scopes, role);
+  if (!scopes.length) throw new Error("Select at least one scope allowed for the role.");
+  const status = input.status === "revoked" ? "revoked" : "active";
+  const now = new Date();
+  await db.update(schema.socApiToken).set({
+    name: input.name.trim() || existing.name,
+    role,
+    scopes,
+    status,
+    expiresAt: input.expiresAt ?? null,
+    revokedAt: status === "revoked" ? existing.revokedAt ?? now : null,
+    updatedAt: now,
+  }).where(eq(schema.socApiToken.id, input.tokenId));
+  if (input.actor) {
+    await recordAuditLog({
+      tenantId: input.tenantId,
+      actor: input.actor,
+      action: "updated_api_token",
+      resourceType: "api_token",
+      resourceId: input.tokenId,
+      detail: `Updated API token ${input.name.trim() || existing.name}.`,
+      metadata: { scopes, role, status },
+    });
+  }
+}
+
+export async function deleteApiToken(tenantId: string, tokenId: string, actor?: SocActor) {
+  const [deleted] = await db.delete(schema.socApiToken)
+    .where(and(eq(schema.socApiToken.id, tokenId), eq(schema.socApiToken.tenantId, tenantId)))
+    .returning({ id: schema.socApiToken.id, name: schema.socApiToken.name });
+  if (!deleted) throw new Error("API token not found.");
+  if (actor) {
+    await recordAuditLog({
+      tenantId,
+      actor,
+      action: "deleted_api_token",
+      resourceType: "api_token",
+      resourceId: deleted.id,
+      detail: `Deleted API token ${deleted.name}.`,
+    });
+  }
+}
+
+export async function validateApiToken(secret: string, requiredScope: ApiTokenScope) {
+  const hash = hashApiToken(secret);
+  const [row] = await db.select().from(schema.socApiToken).where(eq(schema.socApiToken.tokenHash, hash)).limit(1);
+  if (!row || row.status !== "active") return null;
+  if (row.expiresAt && row.expiresAt.getTime() <= Date.now()) return null;
+  const role = normalizeApiTokenRole(row.role);
+  const scopes = normalizeApiTokenScopes(row.scopes, role);
+  if (!scopes.includes(requiredScope)) return null;
+  await db.update(schema.socApiToken).set({ lastUsedAt: new Date(), updatedAt: new Date() }).where(eq(schema.socApiToken.id, row.id));
+  return { id: row.id, tenantId: row.tenantId, role, scopes };
+}
+
 export async function listThreatIntelFeeds(tenantId: string) {
   try {
     const rows = await db.select().from(schema.socThreatIntelFeed).where(eq(schema.socThreatIntelFeed.tenantId, tenantId)).orderBy(desc(schema.socThreatIntelFeed.lastRunAt));
@@ -295,6 +961,76 @@ export async function listThreatIntelMatches(tenantId: string) {
     return rows.map(fromDbThreatIntelIndicator);
   } catch {
     return [];
+  }
+}
+
+export async function listThreatIntelIndicatorsPage(tenantId: string, input: ThreatIntelPageInput = {}): Promise<ThreatIntelIndicatorPage> {
+  const inputPageSize = typeof input.pageSize === "number" && Number.isFinite(input.pageSize) ? input.pageSize : 100;
+  const inputPage = typeof input.page === "number" && Number.isFinite(input.page) ? input.page : 1;
+  const pageSize = Math.min(100, Math.max(1, Math.round(inputPageSize)));
+  const requestedPage = Math.max(1, Math.round(inputPage));
+  const search = input.search?.trim() ?? "";
+  const sourceFeed = input.sourceFeed?.trim() ?? "";
+  const type = normalizeIndicatorType(input.type);
+  const sort = normalizeThreatIntelSort(input.sort);
+  const direction = input.direction === "asc" ? "asc" : "desc";
+  const table = schema.socThreatIntelIndicator;
+  const filters: SQL[] = [
+    eq(table.tenantId, tenantId),
+    or(isNull(table.expiresAt), gt(table.expiresAt, new Date()))!,
+  ];
+
+  if (type) filters.push(eq(table.type, type));
+  if (sourceFeed) filters.push(eq(table.sourceFeed, sourceFeed));
+  if (search) {
+    const pattern = `%${search.replace(/[%_]/g, (value) => `\\${value}`)}%`;
+    filters.push(or(
+      ilike(table.value, pattern),
+      ilike(table.type, pattern),
+      ilike(table.sourceFeed, pattern),
+      sql`${table.tags}::text ILIKE ${pattern}`,
+    )!);
+  }
+
+  const where = and(...filters)!;
+  try {
+    const [{ total = 0 } = { total: 0 }] = await db.select({ total: count() }).from(table).where(where);
+    const numericTotal = Number(total);
+    const totalPages = Math.max(1, Math.ceil(numericTotal / pageSize));
+    const page = Math.min(requestedPage, totalPages);
+    const rows = await db
+      .select()
+      .from(table)
+      .where(where)
+      .orderBy(direction === "asc" ? asc(threatIntelSortColumn(sort)) : desc(threatIntelSortColumn(sort)), asc(table.id))
+      .limit(pageSize)
+      .offset((page - 1) * pageSize);
+
+    return {
+      indicators: rows.map(fromDbThreatIntelIndicator),
+      direction,
+      page,
+      pageSize,
+      search,
+      sort,
+      sourceFeed,
+      total: numericTotal,
+      totalPages,
+      type,
+    };
+  } catch {
+    return {
+      indicators: [],
+      direction,
+      page: 1,
+      pageSize,
+      search,
+      sort,
+      sourceFeed,
+      total: 0,
+      totalPages: 1,
+      type,
+    };
   }
 }
 
@@ -365,6 +1101,25 @@ export async function testThreatIntelFeed(feedId: string, tenantId: string) {
     await db.update(schema.socThreatIntelFeed).set({ status: "failed", lastRunAt: now, lastError: detail }).where(eq(schema.socThreatIntelFeed.id, feedId));
     throw new Error(detail);
   }
+}
+
+export async function syncEnabledThreatIntelFeeds(tenantId?: string) {
+  const filters = tenantId
+    ? and(eq(schema.socThreatIntelFeed.tenantId, tenantId), eq(schema.socThreatIntelFeed.enabled, true))
+    : eq(schema.socThreatIntelFeed.enabled, true);
+  const feeds = await db.select({ id: schema.socThreatIntelFeed.id, tenantId: schema.socThreatIntelFeed.tenantId })
+    .from(schema.socThreatIntelFeed)
+    .where(filters);
+  const results = [];
+  for (const feed of feeds) {
+    try {
+      const count = await testThreatIntelFeed(feed.id, feed.tenantId);
+      results.push({ feedId: feed.id, tenantId: feed.tenantId, count, ok: true });
+    } catch (error) {
+      results.push({ feedId: feed.id, tenantId: feed.tenantId, count: 0, ok: false, error: error instanceof Error ? error.message : "Feed sync failed." });
+    }
+  }
+  return results;
 }
 
 export async function getKelpieIntegration(tenantId: string): Promise<KelpieIntegrationConfig> {
@@ -488,7 +1243,7 @@ export async function listSocSettings(tenantId: string): Promise<SocSettings> {
   }) as SocSettings[K];
   return {
     severity: setting("severity"),
-    routing: setting("routing"),
+    routing: normalizeRoutingSetting(setting("routing")),
     suppression: setting("suppression"),
     caseNumbering: setting("caseNumbering"),
     sla: setting("sla"),
@@ -703,6 +1458,7 @@ function defaultIndicatorConfidence(type: ThreatIntelMatch["type"], sourceName: 
   const source = sourceName.toLowerCase();
   if (source.includes("feodo")) return 95;
   if (source.includes("spamhaus")) return 92;
+  if (source.includes("phishtank") || source.includes("openphish")) return 88;
   if (source.includes("emerging threats")) return 88;
   if (type === "cve") return 90;
   return 80;
@@ -715,6 +1471,7 @@ function defaultIndicatorTags(sourceName: string, type: ThreatIntelMatch["type"]
     source.includes("spamhaus") ? "rogue-network" : "",
     source.includes("blocklist.de") ? "recent-attacker" : "",
     source.includes("emerging threats") ? "compromised-host" : "",
+    source.includes("phishtank") || source.includes("openphish") ? "phishing" : "",
     type,
     "osint",
   ]);
@@ -727,6 +1484,87 @@ function compactStrings(values: string[]) {
 function threatIndicatorId(tenantId: string, feedId: string, type: string, value: string) {
   const digest = createHash("sha256").update(`${tenantId}:${feedId}:${type}:${value.toLowerCase()}`).digest("hex").slice(0, 32);
   return `ioc-${digest}`;
+}
+
+function normalizeThreatIntelSort(value: unknown): ThreatIntelSortKey {
+  if (value === "value" || value === "type" || value === "sourceFeed" || value === "confidence" || value === "firstSeen" || value === "lastSeen" || value === "expiresAt") return value;
+  return "lastSeen";
+}
+
+function normalizeIndicatorType(value: unknown): ThreatIntelMatch["type"] | "" {
+  if (value === "ip" || value === "cidr" || value === "domain" || value === "url" || value === "hash" || value === "email" || value === "file" || value === "cve") return value;
+  return "";
+}
+
+function threatIntelSortColumn(sort: ThreatIntelSortKey) {
+  const table = schema.socThreatIntelIndicator;
+  if (sort === "value") return table.value;
+  if (sort === "type") return table.type;
+  if (sort === "sourceFeed") return table.sourceFeed;
+  if (sort === "confidence") return table.confidence;
+  if (sort === "firstSeen") return table.firstSeen;
+  if (sort === "expiresAt") return table.expiresAt;
+  return table.lastSeen;
+}
+
+function hashApiToken(secret: string) {
+  return createHash("sha256").update(secret).digest("hex");
+}
+
+function tokenPrefix(secret: string) {
+  return `${secret.slice(0, 10)}...${secret.slice(-4)}`;
+}
+
+function normalizeApiTokenRole(value: unknown): ApiTokenRole {
+  if (value === "owner" || value === "admin" || value === "member") return value;
+  return "member";
+}
+
+function normalizeApiTokenScopes(values: unknown, role: ApiTokenRole): ApiTokenScope[] {
+  const selected = Array.isArray(values) ? values : [];
+  const allowed = new Set(allowedApiTokenScopesForRole(role));
+  return selected
+    .filter((value): value is ApiTokenScope => typeof value === "string" && allowed.has(value as ApiTokenScope))
+    .filter((value, index, all) => all.indexOf(value) === index);
+}
+
+function normalizeRoutingSetting(value: SocSettings["routing"]): SocSettings["routing"] {
+  const channels: IntegrationDelivery["channel"][] = ["email", "slack", "webhook", "sentinel", "wazuh"];
+  const normalizeChannels = (input: unknown, fallback = "") => {
+    const selected = Array.isArray(input) ? input : fallback ? [fallback] : [];
+    return selected
+      .filter((channel): channel is IntegrationDelivery["channel"] => typeof channel === "string" && channels.includes(channel as IntegrationDelivery["channel"]))
+      .filter((channel, index, all) => all.indexOf(channel) === index);
+  };
+  const caseCreationSeverity = value.caseCreationSeverity === "high" || value.caseCreationSeverity === "medium" || value.caseCreationSeverity === "disabled"
+    ? value.caseCreationSeverity
+    : "critical";
+  return {
+    ...socSettingsDefaults.routing,
+    ...value,
+    criticalChannels: normalizeChannels(value.criticalChannels, value.criticalChannel),
+    highChannels: normalizeChannels(value.highChannels, value.highChannel),
+    mediumChannels: normalizeChannels(value.mediumChannels),
+    lowChannels: normalizeChannels(value.lowChannels),
+    caseCreationSeverity,
+    quietHoursEnabled: value.quietHoursEnabled === true,
+    quietHoursStart: typeof value.quietHoursStart === "string" && value.quietHoursStart ? value.quietHoursStart : socSettingsDefaults.routing.quietHoursStart,
+    quietHoursEnd: typeof value.quietHoursEnd === "string" && value.quietHoursEnd ? value.quietHoursEnd : socSettingsDefaults.routing.quietHoursEnd,
+  };
+}
+
+function slugify(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || randomUUID();
+}
+
+function requiredConnectorFields(catalogId: string, config: Record<string, unknown>, credentialReference?: string) {
+  const item = getConnectorDefinition(catalogId);
+  if (!item) return ["catalogId"];
+  const testConfig = { ...config };
+  for (const field of item.requiredFields) {
+    if (field.secret && credentialReference) testConfig[field.key] = credentialReference;
+  }
+  return validateConnectorConfig(catalogId, testConfig).missingFields;
 }
 
 async function listSettingsByPrefix(tenantId: string, prefix: string): Promise<Record<string, Record<string, unknown>>> {
@@ -881,6 +1719,7 @@ export type SocActor = {
   id: string;
   name: string;
   tenantId: string;
+  role?: string;
 };
 
 export async function assignAlert(alertId: string, actor: SocActor) {
