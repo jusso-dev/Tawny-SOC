@@ -1,6 +1,7 @@
 import {
   Activity,
   AlertTriangle,
+  BrainCircuit,
   Braces,
   DatabaseZap,
   FolderKanban,
@@ -19,6 +20,7 @@ const nav = [
   { href: "/alerts", label: "Alert Queue", icon: AlertTriangle },
   { href: "/incidents", label: "Incidents", icon: FolderKanban },
   { href: "/detections", label: "Detection Rules", icon: Braces },
+  { href: "/ueba", label: "UEBA Behavior", icon: BrainCircuit },
   { href: "/threat-intel", label: "Threat Intel", icon: RadioTower },
   { href: "/playbooks", label: "Playbooks", icon: Workflow },
   { href: "/hunt", label: "Search / Hunt", icon: Search },

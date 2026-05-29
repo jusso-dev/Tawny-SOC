@@ -38,6 +38,8 @@ The SOC workspace includes:
 - Alert Detail: summary, evidence, raw JSON, threat intel matches, MITRE mapping, analyst timeline, and actions for case creation, Kelpie promotion, suppression, and response.
 - Incidents / Cases: native Tawny-SOC case grouping with priority, lifecycle, assignment, TLP/PAP, classification, observables, linked hosts, linked alerts, SLA state, evidence records, and Kelpie sync state.
 - Detection Rules: Sigma-style detection-as-code view with working YAML import, metadata, ATT&CK mapping, test status, current revision, last-triggered state, scheduled detections, multi-event correlation helpers, and tuning actions.
+- Detection Packs: portable `tawny-detection-pack/v1` manifests with YAAQL rules, summary rules, validation, repository path metadata, and CI command hints for GitOps workflows.
+- UEBA Behavior: deterministic behavior records that convert low-level telemetry into explainable user, host, process, network, privilege, data access, and detection-context activity.
 - Threat Intelligence: feed management and searchable, sortable, filterable, paginated IOC browser for STIX, OpenIOC, CSV, TXT, MISP, OTX, URLhaus, and custom URL feeds.
 - Playbooks: ordered SOC workflows for malware, suspicious PowerShell, new admin user, suspicious outbound IP, credential theft, host isolation, and suspicious URL style investigations.
 - Search / Hunt: YAAQL-powered enterprise hunt workspace for event type, host, user, process, hash, IP, domain, time, and payload-path queries, with examples, field pivots, saved searches, and clickable saved-search loading.
@@ -115,6 +117,59 @@ Starter feed endpoints seeded for local development:
 Indicators loaded from feeds receive a configurable default TTL. The default is 7 days and can be changed in `Settings -> Threat intel`. Expired IOCs are excluded from the active indicator table and removed by the scheduled retention sweep.
 
 The Threat Intelligence page is backed by database filters and shows 100 active indicators per page. Search, type filter, source feed filter, sort, and pagination update the URL through Next client routing while the table data stays server-backed.
+
+## UEBA Behavior Layer
+
+UEBA in Tawny-SOC is a derived behavior layer, not a separate log source. Raw security logs enter the SIEM through Tawny ingest or connector pipelines, are normalized into retained alerts/events, and are then converted into behavior records:
+
+```text
+Raw logs -> normalized SIEM events -> entity extraction -> behavior records -> summary/anomaly/risk signals -> alerts, cases, and hunt pivots
+```
+
+Microsoft Entra ID sign-in logs are a strong identity source, but they are only one input. Useful UEBA telemetry also includes Entra audit logs, service principal sign-ins, provisioning logs, Okta, Google Workspace, AWS CloudTrail, Microsoft 365 audit logs, VPN, endpoint/Sysmon, EDR, firewall, proxy, and SaaS audit logs. Entra sign-ins answer who signed in, how they authenticated, which app/resource was accessed, from which IP/device, and whether MFA or Conditional Access changed the result. Entra audit logs add user, group, app, role, and tenant changes.
+
+The first pass does not ingest a special `ueba` event type. It derives behavior records from retained alerts and telemetry on the `/ueba` page. Each behavior record includes:
+
+- actor
+- target
+- category
+- source event IDs
+- risk score
+- confidence
+- extracted fields
+- plain-language reasons
+
+Current deterministic behavior categories:
+
+- `authentication_failure`: auth, sign-in, login, MFA, credential, or logon activity with failure, deny, invalid, error, lockout, or similar outcome.
+- `authentication_observed`: successful or neutral authentication-style activity.
+- `process_execution`: process, script, command, shell, image, or command-line activity.
+- `suspicious_process_execution`: process activity with markers such as PowerShell, `-enc`, `downloadstring`, `base64`, `curl`, `wget`, or `rundll32`.
+- `network_activity`: source IP, destination IP, destination port, URL, DNS, proxy, firewall, HTTP, or connection fields.
+- `network_block`: network activity with deny, blocked, rejected, or failure outcomes.
+- `privilege_or_admin_change`: admin, role, group, permission, elevation, IAM, root, or user-management activity.
+- `data_access`: file, object, SharePoint, mailbox, download, upload, or data-object access activity.
+- `detection_context`: matched detection rule IDs or MITRE ATT&CK techniques on the source event.
+
+Risk scoring is intentionally explainable. The current first-pass score starts from source event severity, adds behavior-specific modifiers, increases for suspicious markers and detection context, then caps the value at `100`. The reasons array shows exactly which fields and rule conditions contributed. This makes the behavior layer deterministic and reviewable rather than opaque machine-learning scoring.
+
+Entity summaries group behavior by tenant and actor so repeated activity can be reviewed without crossing tenant boundaries. This follows common SIEM practice from NIST log-management guidance, MITRE ATT&CK data components, CISA event-logging guidance, and Microsoft Sentinel's behavior-layer pattern: normalize diverse logs, extract entities, translate noisy events into "who did what to whom", preserve links back to raw events, and make every detection auditable.
+
+Remaining maturity work for full UEBA:
+
+- Persist user, host, IP, service-account, app, and cloud-resource entity tables.
+- Persist behavior records and risk history instead of deriving only from currently retained records.
+- Add baseline training windows for normal locations, devices, apps, hours, processes, destinations, and data access.
+- Add peer-group comparisons for users and service accounts with similar roles or groups.
+- Add anomaly rules for impossible travel, first-seen admin action, unusual app consent, new country/device, rare process, excessive failures, privilege changes, and unusual data access.
+- Version every behavior/anomaly rule with ID, description, fields used, thresholds, MITRE mapping, test fixtures, and false-positive notes.
+- Add tuning controls for suppressions, allowlists, threshold overrides, and analyst feedback.
+
+## Detection Packs And Summary Rules
+
+Tawny-SOC includes a portable starter detection pack in code using the `tawny-detection-pack/v1` manifest shape. Packs can contain YAAQL detections, Sigma source, summary rules, MITRE mappings, tests, repository path metadata, and a CI command hint.
+
+Summary rules aggregate retained records into higher-level signals such as authentication failure bursts or suspicious process concentration. They are tenant-scoped by default and are designed to work with Git-based detection workflows rather than a cloud-specific SIEM content format.
 
 ## Settings And Administration
 

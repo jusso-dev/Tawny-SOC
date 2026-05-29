@@ -1057,6 +1057,57 @@ button:disabled,
   gap: 0.75rem;
 }
 
+.detection-pack-panel,
+.behavior-metrics,
+.behavior-category-band {
+  margin-bottom: 0.75rem;
+}
+
+.behavior-category-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.behavior-category-grid div {
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--bg-strong);
+  padding: 0.7rem;
+}
+
+.behavior-category-grid span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.72rem;
+  text-transform: capitalize;
+}
+
+.behavior-category-grid strong {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: 1.1rem;
+}
+
+.behavior-reasons {
+  display: grid;
+  gap: 0.28rem;
+}
+
+.behavior-reasons span {
+  display: block;
+  margin: 0;
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 0.76rem;
+  line-height: 1.35;
+}
+
+.behavior-table {
+  min-width: 64rem;
+}
+
 .rule-card .panel-heading,
 .playbook-card .panel-heading {
   align-items: flex-start;
@@ -2145,6 +2196,7 @@ td .inline-action,
   .retention-grid,
   .config-grid,
   .scope-grid,
+  .behavior-category-grid,
   .intel-controls {
     grid-template-columns: 1fr;
   }
@@ -2174,6 +2226,7 @@ td .inline-action,
   .agent-grid,
   .team-grid,
   .queue-health,
+  .behavior-category-grid,
   .detail-grid {
     grid-template-columns: 1fr;
   }
