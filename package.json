@@ -16,14 +16,14 @@
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
-    "@better-auth/drizzle-adapter": "^1.6.15",
-    "@next/eslint-plugin-next": "^16.2.7",
-    "better-auth": "^1.6.15",
+    "@better-auth/drizzle-adapter": "^1.6.18",
+    "@next/eslint-plugin-next": "^16.2.9",
+    "better-auth": "^1.6.18",
     "clsx": "^2.1.1",
     "dotenv": "^17.4.2",
     "drizzle-orm": "^0.45.2",
     "lucide-react": "^0.460.0",
-    "next": "^16.2.7",
+    "next": "^16.2.9",
     "node-cron": "^4.2.1",
     "postgres": "^3.4.9",
     "react": "^19.2.7",
@@ -33,14 +33,14 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@types/node": "^22.19.20",
+    "@types/node": "^22.19.21",
     "@types/node-cron": "^3.0.11",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@types/uuid": "^11.0.0",
     "drizzle-kit": "^0.31.10",
     "eslint": "^9.39.4",
-    "eslint-config-next": "^16.2.7",
+    "eslint-config-next": "^16.2.9",
     "tsx": "^4.22.4",
     "typescript": "^5.9.3",
     "vitest": "^4.1.8"
