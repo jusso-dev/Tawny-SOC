@@ -16,15 +16,15 @@
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
-    "@better-auth/drizzle-adapter": "^1.6.18",
+    "@better-auth/drizzle-adapter": "^1.6.19",
     "@next/eslint-plugin-next": "^16.2.9",
-    "better-auth": "^1.6.18",
+    "better-auth": "^1.6.19",
     "clsx": "^2.1.1",
     "dotenv": "^17.4.2",
     "drizzle-orm": "^0.45.2",
     "lucide-react": "^0.460.0",
     "next": "^16.2.9",
-    "node-cron": "^4.2.1",
+    "node-cron": "^4.3.0",
     "postgres": "^3.4.9",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
