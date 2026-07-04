@@ -1256,6 +1256,15 @@ export async function saveSocSetting(tenantId: string, key: string, value: Recor
   await saveSetting(tenantId, `soc.${key}`, value);
 }
 
+export async function getSocSettingRecord(tenantId: string, key: string): Promise<Record<string, unknown>> {
+  try {
+    const rows = await listSettingsByPrefix(tenantId, `soc.${key}`);
+    return rows[`soc.${key}`] ?? {};
+  } catch {
+    return {};
+  }
+}
+
 type ParsedThreatIndicator = {
   confidence: number;
   expiresAt?: Date | null;

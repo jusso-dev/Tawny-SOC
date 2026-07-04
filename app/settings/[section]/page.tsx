@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 import { ActionButton } from "@/components/action-button";
 import { AdminAccessForms } from "@/components/admin-access-forms";
+import { AiSettingsForm } from "@/components/ai-settings-form";
 import { ApiTokenForms } from "@/components/api-token-forms";
 import { NotificationRoutingForm } from "@/components/notification-routing-form";
 import { RetentionPolicyForm } from "@/components/retention-policy-form";
@@ -12,6 +13,7 @@ import {
 } from "@/components/settings-navigation";
 import { PageHeader, SocShell } from "@/components/soc-shell";
 import { SettingsConfigForm } from "@/components/settings-config-form";
+import { getAiSettings, redactAiSettings } from "@/lib/ai";
 import { getSocData } from "@/lib/soc-domain";
 import { listApiTokens } from "@/lib/store";
 import { requireSession } from "@/lib/session";
@@ -46,6 +48,15 @@ export default async function SettingsSectionPage({ params }: SettingsSectionPag
 async function SettingsSectionContent({ sectionId }: { sectionId: SettingsSectionId }) {
   if (sectionId === "access") return <AccessSettings />;
   const data = await getSocData();
+
+  if (sectionId === "ai") {
+    const aiSettings = redactAiSettings(await getAiSettings(data.tenantId));
+    return (
+      <SettingsPanel title="AI engine">
+        <AiSettingsForm settings={aiSettings} />
+      </SettingsPanel>
+    );
+  }
 
   if (sectionId === "severity") {
     return (

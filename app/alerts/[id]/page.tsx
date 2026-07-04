@@ -2,6 +2,7 @@ import { AlertTriangle, Braces, FolderPlus, Send, ShieldCheck, TerminalSquare } 
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ActionButton } from "@/components/action-button";
+import { AlertCopilotPanel } from "@/components/ai-copilot-panel";
 import { PageHeader, SocShell } from "@/components/soc-shell";
 import { getSocData, relativeTime, severityClass } from "@/lib/soc-domain";
 import { listAlertTimeline } from "@/lib/store";
@@ -54,6 +55,8 @@ export default async function AlertDetailPage({ params }: { params: Promise<{ id
         </section>
 
         <aside className="side-stack">
+          <AlertCopilotPanel alertId={alert.id} />
+
           <section className="panel">
             <p className="eyebrow">Threat intelligence</p>
             <h2>IOC matches</h2>

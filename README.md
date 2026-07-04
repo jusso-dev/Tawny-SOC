@@ -32,6 +32,7 @@ The local seed creates:
 The SOC workspace includes:
 
 - SOC Overview: alert volume, incident volume, open cases, critical/high alerts, affected hosts, queue health, top rules, top MITRE tactics, top users, top processes, top external IPs, trends, and needs-attention items.
+- AI engine and agents: hot-swappable Azure OpenAI or AWS Bedrock model provider configured in the UI, with triage, threat intel enrichment, and case writing agents surfaced on alert and case detail pages, deterministic fallbacks when AI is off, and audit-logged agent runs.
 - Scalable ingestion: Tawny HTTP ingest, generic JSON, syslog/CEF, Windows Event/Sysmon, AWS CloudTrail, Azure sign-in/activity, Microsoft 365 audit, firewall/network logs, parser normalization, dead-letter tracking, and source health.
 - Connector catalog: cloud, identity, SaaS, network, endpoint, and generic connectors with required fields, credential references, safe local test actions, status, schedule, and redaction.
 - Alert Queue: severity, confidence, status, rule, source, host, user, process, MITRE, TI hits, assignee, filters, and bulk action controls.
@@ -171,12 +172,25 @@ Tawny-SOC includes a portable starter detection pack in code using the `tawny-de
 
 Summary rules aggregate retained records into higher-level signals such as authentication failure bursts or suspicious process concentration. They are tenant-scoped by default and are designed to work with Git-based detection workflows rather than a cloud-specific SIEM content format.
 
+## AI Engine And Agents
+
+Tawny-SOC ships an AI-native analyst layer driven by a tenant-configurable model provider. The engine is hot-swappable between Azure OpenAI (chat completions) and AWS Bedrock (Converse API with SigV4 signing, so any Converse-compatible model ID works) from `/settings/ai` — provider choice, credentials, model or deployment, per-agent toggles, and a connection test that validates unsaved credentials before saving. Secrets are stored tenant-scoped in SOC settings, redacted on read, and never returned to the browser.
+
+Three agents run through the configured engine:
+
+- Triage agent: verdict (`escalate`/`investigate`/`monitor`/`likely_benign`), confidence, rationale, recommended actions, and a suggested playbook per alert. Backs the alert detail copilot panel and `POST /api/copilot/triage`.
+- Threat intel enrichment agent: per-indicator risk assessment against feed matches, ready-to-run YAAQL hunt pivots, and clearly-labeled hypotheses.
+- Case writing agent: executive summary, technical narrative, impact assessment, and recommendations drafted from the case record and linked alerts, with copy-to-clipboard on the case detail page.
+
+Agent panels call `POST /api/ai/agents` with `{ agent, alertId | incidentId }`. Every agent run and failure is written to the audit log with provider, model, latency, and token counts. When the engine is disabled, an agent is toggled off, or a provider call fails, each agent degrades to a deterministic fallback so triage, enrichment, and case output never block on model availability — result panels show which engine produced the output. All agent prompts treat telemetry, payload fields, and feed content as untrusted data and instruct the model to ignore instructions embedded in them.
+
 ## Settings And Administration
 
 The Settings root page is a categorized index with tabs for all, operations, access, integrations, and governance. Each settings area also has its own subpage under `/settings/[section]` so administration screens keep the main SOC layout and left navigation.
 
 Available settings sections:
 
+- AI engine
 - Severity mapping
 - Notification routing
 - Suppression rules
@@ -212,7 +226,7 @@ pnpm test
 pnpm build
 ```
 
-Current workflow tests cover incident creation from alert, alert/case assignment, TI enrichment, Kelpie alert promotion, Kelpie case sync, notification delivery state, multi-tenant isolation, and suppression behavior.
+Current workflow tests cover incident creation from alert, alert/case assignment, TI enrichment, Kelpie alert promotion, Kelpie case sync, notification delivery state, multi-tenant isolation, and suppression behavior. AI engine tests cover provider hot-swap, secret redaction and keep-on-blank credential merging, Azure OpenAI and Bedrock request/response handling, AWS SigV4 signing against the AWS reference vector, prompt guardrails, and deterministic agent fallbacks.
 
 ## Sources And Inspiration
 

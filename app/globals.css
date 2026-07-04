@@ -951,6 +951,25 @@ button:disabled,
   gap: 0.45rem;
 }
 
+.ai-agent-result {
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface-2);
+  padding: 0.65rem;
+  margin-top: 0.55rem;
+  display: grid;
+  gap: 0.45rem;
+  font-size: 0.82rem;
+}
+
+.ai-agent-result ul {
+  margin: 0;
+  padding-left: 1.1rem;
+  display: grid;
+  gap: 0.25rem;
+}
+
 .rank-list span,
 .phase-list > article > span {
   display: grid;

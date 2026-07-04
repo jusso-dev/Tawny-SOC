@@ -9,12 +9,14 @@ import {
   ScrollText,
   ShieldAlert,
   SlidersHorizontal,
+  Sparkles,
   UsersRound,
   type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
 
 export type SettingsSectionId =
+  | "ai"
   | "severity"
   | "notifications"
   | "suppression"
@@ -48,6 +50,14 @@ export const settingsCategories: Array<{ id: "all" | SettingsCategory; label: st
 ];
 
 export const settingsSections: SettingsSection[] = [
+  {
+    category: "operations",
+    description: "Choose the AI engine that drives triage, enrichment, and case agents.",
+    href: "/settings/ai",
+    icon: Sparkles,
+    id: "ai",
+    label: "AI engine",
+  },
   {
     category: "operations",
     description: "Normalize Tawny, Sigma, IOC, and AI severities into SOC priorities.",

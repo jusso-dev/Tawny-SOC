@@ -43,6 +43,8 @@ import {
   type IntegrationChannelSetting,
   type SocActor,
 } from "@/lib/store";
+import { saveAiSettings, testAiConnection, type AiSettingsInput } from "@/lib/ai";
+import { parseAiProviderId } from "@/lib/ai/settings";
 import { disableSigmaRule, duplicateSigmaRule, importSigmaRule } from "@/lib/sigma";
 import { promoteAlertToKelpie, promoteIncidentToKelpie, recordDeliveryState } from "@/lib/soc-workflows";
 import type { IntegrationDelivery, KelpieIntegrationConfig, ThreatIntelFeed } from "@/lib/types";
@@ -186,6 +188,16 @@ export async function POST(request: Request) {
       const results = await syncEnabledThreatIntelFeeds(actor.tenantId);
       const loaded = results.reduce((total, result) => total + result.count, 0);
       return ok(`Synced ${results.length} feed${results.length === 1 ? "" : "s"} and loaded ${loaded.toLocaleString()} indicators.`);
+    }
+    if (action === "save-ai-settings" || action === "test-ai-connection") {
+      requirePermission(actor.role, "settings.write");
+      const input = parseAiSettingsInput(body);
+      if (action === "save-ai-settings") {
+        const saved = await saveAiSettings(actor.tenantId, input, actor);
+        return ok(`AI engine saved: ${saved.provider === "aws-bedrock" ? "AWS Bedrock" : "Azure OpenAI"}${saved.enabled ? "" : " (disabled)"}.`);
+      }
+      const result = await testAiConnection(actor.tenantId, input);
+      return ok(`${result.provider} responded via ${result.model} in ${result.latencyMs}ms.`);
     }
     if (action === "save-soc-setting") {
       requirePermission(actor.role, "settings.write");
@@ -435,6 +447,31 @@ async function addExistingUser(body: Record<string, unknown>, actor: SocActor) {
     target: [schema.member.organizationId, schema.member.userId],
     set: { role },
   });
+}
+
+function parseAiSettingsInput(body: Record<string, unknown>): AiSettingsInput {
+  return {
+    enabled: Boolean(body.enabled),
+    provider: parseAiProviderId(body.provider),
+    azure: {
+      endpoint: optionalString(body.azureEndpoint),
+      deployment: optionalString(body.azureDeployment),
+      apiVersion: optionalString(body.azureApiVersion),
+      apiKey: optionalString(body.azureApiKey),
+    },
+    bedrock: {
+      region: optionalString(body.bedrockRegion),
+      modelId: optionalString(body.bedrockModelId),
+      accessKeyId: optionalString(body.bedrockAccessKeyId),
+      secretAccessKey: optionalString(body.bedrockSecretAccessKey),
+      sessionToken: optionalString(body.bedrockSessionToken),
+    },
+    agents: {
+      triage: body.agentTriage !== false,
+      enrichment: body.agentEnrichment !== false,
+      "case-writer": body.agentCaseWriter !== false,
+    },
+  };
 }
 
 function parseIntegrationChannel(body: Record<string, unknown>, tenantId: string): IntegrationChannelSetting & { tenantId: string } {

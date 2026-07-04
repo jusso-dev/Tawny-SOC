@@ -2,6 +2,7 @@ import { ClipboardList, ExternalLink, PlayCircle, Send, ShieldCheck } from "luci
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ActionButton } from "@/components/action-button";
+import { CaseCopilotPanel } from "@/components/ai-copilot-panel";
 import { PageHeader, SocShell } from "@/components/soc-shell";
 import { getSocData, relativeTime, severityClass } from "@/lib/soc-domain";
 
@@ -73,6 +74,8 @@ export default async function IncidentDetailPage({ params }: { params: Promise<{
         </section>
 
         <aside className="side-stack">
+          <CaseCopilotPanel incidentId={incident.id} />
+
           <section className="panel">
             <p className="eyebrow">Tasks</p>
             <h2>Playbook work</h2>
