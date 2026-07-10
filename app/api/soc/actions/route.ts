@@ -49,7 +49,7 @@ import { disableSigmaRule, duplicateSigmaRule, importSigmaRule } from "@/lib/sig
 import { promoteAlertToKelpie, promoteIncidentToKelpie, recordDeliveryState } from "@/lib/soc-workflows";
 import type { IntegrationDelivery, KelpieIntegrationConfig, ThreatIntelFeed } from "@/lib/types";
 
-const validChannels: IntegrationDelivery["channel"][] = ["email", "slack", "webhook", "sentinel", "wazuh"];
+const validChannels: IntegrationDelivery["channel"][] = ["email", "slack", "webhook", "sentinel", "wazuh", "google_secops"];
 const validRoles = new Set(["member", "admin", "owner"]);
 const validFeedTypes: ThreatIntelFeed["type"][] = ["STIX", "OpenIOC", "CSV", "TXT", "MISP", "OTX", "URLhaus", "Custom URL"];
 const validApiTokenScopes = new Set<ApiTokenScope>([
@@ -484,6 +484,10 @@ function parseIntegrationChannel(body: Record<string, unknown>, tenantId: string
     endpoint: optionalString(body.endpoint),
     credential: optionalString(body.credential),
     credentialConfigured: false,
+    customerId: optionalString(body.customerId),
+    namespace: optionalString(body.namespace),
+    logType: optionalString(body.logType),
+    ingestionMode: body.ingestionMode === "udm" ? "udm" : "unstructured",
   };
 }
 

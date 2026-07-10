@@ -44,7 +44,7 @@ The SOC workspace includes:
 - Threat Intelligence: feed management and searchable, sortable, filterable, paginated IOC browser for STIX, OpenIOC, CSV, TXT, MISP, OTX, URLhaus, and custom URL feeds.
 - Playbooks: ordered SOC workflows for malware, suspicious PowerShell, new admin user, suspicious outbound IP, credential theft, host isolation, and suspicious URL style investigations.
 - Search / Hunt: YAAQL-powered enterprise hunt workspace for event type, host, user, process, hash, IP, domain, time, and payload-path queries, with examples, field pivots, saved searches, and clickable saved-search loading.
-- Integrations: email, Slack, webhook, Microsoft Sentinel, Wazuh, Kelpie, connector health, endpoint/token/credential configuration, delivery tests, and delivery state.
+- Integrations: email, Slack, webhook, Microsoft Sentinel, Google Security Operations, Wazuh, Kelpie, connector health, endpoint/token/credential configuration, delivery tests, and delivery state.
 - SOC Settings: split settings subpages for severity mapping, notification routing, suppression, threat intel TTL, case numbering, SLAs, role permissions, team access, API tokens, retention, compliance reports, and audit logs.
 - Access and authentication: BetterAuth sign-in/sign-up, team member administration under Settings, tenant invitations, magic-link invite flow, and MFA posture display.
 - API tokens: tenant-scoped API keys with role-limited scopes, create/update/revoke/delete workflows, and bearer-token access for ingest and read APIs.
@@ -216,6 +216,15 @@ Playbooks are ordered workflows with phases, owners, objectives, evidence requir
 4. Analysts assign, dismiss, suppress, or promote alerts into native Tawny-SOC cases.
 5. Cases track ownership, lifecycle, observables, tasks, comments, and audit timeline.
 6. Cases can be promoted or synced to Kelpie while retaining external references.
+
+## Google Security Operations forwarding
+
+Configure the Google Security Operations channel on the Integrations page to forward every newly ingested Tawny log batch. The channel supports Google's two ingestion data types:
+
+- `unstructured`: sends UTF-8 JSON log lines to `unstructuredlogentries:batchCreate` with a configured Google SecOps `log_type` and namespace.
+- `udm`: maps Tawny event metadata, principals, targets, severity, and common event categories into UDM and sends them to `udmevents:batchCreate`.
+
+Set the endpoint to the regional `malachiteingestion-pa.googleapis.com` base URL for the Google SecOps instance. Authentication accepts either the service-account JSON supplied for the instance (recommended, with OAuth tokens generated using the `malachite-ingestion` scope) or an existing OAuth access token. The sender keeps uncompressed requests below 1 MB, uses RFC 3339 timestamps consistently within each unstructured batch, and records successful or failed attempts under Delivery state. Inbound Tawny ingestion remains successful if Google forwarding fails.
 
 ## Tests
 

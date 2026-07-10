@@ -2,6 +2,7 @@ export type Severity = "critical" | "high" | "medium" | "low";
 export type AlertStatus = "open" | "triaging" | "investigating" | "suppressed" | "dismissed" | "resolved";
 export type IncidentStatus = "new" | "open" | "triaging" | "investigating" | "contained" | "eradicated" | "recovered" | "closed";
 export type KelpieSyncStatus = "not_synced" | "synced" | "failed" | "stale" | "conflict";
+export type GoogleSecOpsIngestionMode = "unstructured" | "udm";
 
 export type SocEvent = {
   id: string;
@@ -158,7 +159,7 @@ export type KelpieIntegrationConfig = {
 
 export type IntegrationDelivery = {
   id: string;
-  channel: "email" | "slack" | "webhook" | "sentinel" | "wazuh" | "kelpie";
+  channel: "email" | "slack" | "webhook" | "sentinel" | "wazuh" | "google_secops" | "kelpie";
   target: string;
   state: "queued" | "delivered" | "retrying" | "failed";
   attempts: number;

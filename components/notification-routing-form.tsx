@@ -132,5 +132,6 @@ function firstChannel(values: FormDataEntryValue[]) {
 
 function channelLabel(channel: string) {
   if (channel === "sentinel") return "Microsoft Sentinel";
+  if (channel === "google_secops") return "Google Security Operations";
   return channel.slice(0, 1).toUpperCase() + channel.slice(1);
 }

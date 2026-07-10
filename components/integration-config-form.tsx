@@ -105,6 +105,10 @@ export function IntegrationConfigForm({
               endpoint: formData.get("endpoint"),
               credential: formData.get("credential"),
               enabled: formData.get("enabled") === "on",
+              customerId: formData.get("customerId"),
+              namespace: formData.get("namespace"),
+              logType: formData.get("logType"),
+              ingestionMode: formData.get("ingestionMode"),
             }, `${channel.channel}-save`)}
           >
             <div className="config-form-heading">
@@ -120,9 +124,36 @@ export function IntegrationConfigForm({
               <span>Endpoint</span>
               <input name="endpoint" defaultValue={channel.endpoint} placeholder={channelPlaceholder(channel.channel)} />
             </label>
+            {channel.channel === "google_secops" ? (
+              <>
+                <label>
+                  <span>Customer ID</span>
+                  <input name="customerId" defaultValue={channel.customerId} placeholder="c8c65bfa-5f2c-42d4-9189-64bb7b939f2c" required />
+                </label>
+                <label>
+                  <span>Ingestion data type</span>
+                  <select name="ingestionMode" defaultValue={channel.ingestionMode ?? "unstructured"}>
+                    <option value="unstructured">Unstructured logs</option>
+                    <option value="udm">UDM events</option>
+                  </select>
+                </label>
+                <label>
+                  <span>Log type</span>
+                  <input name="logType" defaultValue={channel.logType} placeholder="TAWNY_SOC" />
+                </label>
+                <label>
+                  <span>Namespace</span>
+                  <input name="namespace" defaultValue={channel.namespace} placeholder="tawny-soc" />
+                </label>
+              </>
+            ) : null}
             <label>
-              <span>Token or credential</span>
-              <input name="credential" type="password" placeholder={channel.credentialConfigured ? "Saved, leave blank to keep" : "Paste credential"} autoComplete="off" />
+              <span>{channel.channel === "google_secops" ? "Service-account JSON or OAuth token" : "Token or credential"}</span>
+              {channel.channel === "google_secops" ? (
+                <textarea name="credential" placeholder={channel.credentialConfigured ? "Saved, leave blank to keep" : "Paste service-account JSON"} autoComplete="off" />
+              ) : (
+                <input name="credential" type="password" placeholder={channel.credentialConfigured ? "Saved, leave blank to keep" : "Paste credential"} autoComplete="off" />
+              )}
             </label>
             <label className="checkbox-field">
               <input name="enabled" type="checkbox" defaultChecked={channel.enabled} />
@@ -144,6 +175,10 @@ export function IntegrationConfigForm({
                     endpoint: formData.get("endpoint"),
                     credential: formData.get("credential"),
                     enabled: formData.get("enabled") === "on",
+                    customerId: formData.get("customerId"),
+                    namespace: formData.get("namespace"),
+                    logType: formData.get("logType"),
+                    ingestionMode: formData.get("ingestionMode"),
                   }, `${channel.channel}-test`);
                 }}
               >
@@ -159,6 +194,7 @@ export function IntegrationConfigForm({
 
 function channelLabel(channel: string) {
   if (channel === "sentinel") return "Microsoft Sentinel";
+  if (channel === "google_secops") return "Google Security Operations";
   return channel.slice(0, 1).toUpperCase() + channel.slice(1);
 }
 
@@ -167,6 +203,7 @@ function channelCopy(channel: string) {
   if (channel === "slack") return "Critical and high alert forwarding.";
   if (channel === "webhook") return "Generic outbound automation calls.";
   if (channel === "sentinel") return "Forward notable events into Log Analytics.";
+  if (channel === "google_secops") return "Forward ingested logs as Google SecOps unstructured batches or native UDM events.";
   return "Forward decoded Tawny events to Wazuh.";
 }
 
@@ -175,5 +212,6 @@ function channelPlaceholder(channel: string) {
   if (channel === "slack") return "https://hooks.slack.com/services/...";
   if (channel === "sentinel") return "https://ingest.monitor.azure.com/...";
   if (channel === "wazuh") return "https://wazuh.example.com/api";
+  if (channel === "google_secops") return "https://australia-southeast1-malachiteingestion-pa.googleapis.com";
   return "https://automation.example.com/tawny";
 }

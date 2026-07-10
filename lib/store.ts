@@ -18,7 +18,9 @@ import type { IngestionSourceType } from "@/lib/ingestion";
 import { listSigmaRules } from "@/lib/sigma";
 import { createIncidentFromAlert } from "@/lib/soc-workflows";
 import { playbooks } from "@/lib/rules";
+import { sendGoogleSecOpsLogs, type GoogleSecOpsConfig } from "@/lib/integrations/google-secops";
 import type {
+  GoogleSecOpsIngestionMode,
   IngestPayload,
   IntegrationDelivery,
   KelpieIntegrationConfig,
@@ -46,6 +48,10 @@ export type IntegrationChannelSetting = {
   endpoint: string;
   credential: string;
   credentialConfigured: boolean;
+  customerId?: string;
+  namespace?: string;
+  logType?: string;
+  ingestionMode?: GoogleSecOpsIngestionMode;
 };
 
 export type IngestSourceSetting = {
@@ -1174,7 +1180,7 @@ export async function getKelpieToken(tenantId: string) {
 }
 
 export async function listIntegrationChannels(tenantId: string): Promise<IntegrationChannelSetting[]> {
-  const channels: IntegrationDelivery["channel"][] = ["email", "slack", "webhook", "sentinel", "wazuh"];
+  const channels: IntegrationDelivery["channel"][] = ["email", "slack", "webhook", "sentinel", "wazuh", "google_secops"];
   const rows = await listSettingsByPrefix(tenantId, "integration.");
   return channels.map((channel) => {
     const value = rows[`integration.${channel}`] ?? {};
@@ -1185,6 +1191,10 @@ export async function listIntegrationChannels(tenantId: string): Promise<Integra
       endpoint: typeof value.endpoint === "string" ? value.endpoint : "",
       credential: "",
       credentialConfigured: credential.length > 0,
+      customerId: typeof value.customerId === "string" ? value.customerId : "",
+      namespace: typeof value.namespace === "string" ? value.namespace : "tawny-soc",
+      logType: typeof value.logType === "string" ? value.logType : "TAWNY_SOC",
+      ingestionMode: value.ingestionMode === "udm" ? "udm" : "unstructured",
     };
   });
 }
@@ -1196,14 +1206,22 @@ export async function saveIntegrationChannel(input: IntegrationChannelSetting & 
     enabled: input.enabled,
     endpoint: input.endpoint,
     credential: input.credential.trim() || currentCredential,
+    customerId: input.customerId?.trim() ?? "",
+    namespace: input.namespace?.trim() || "tawny-soc",
+    logType: input.logType?.trim() || "TAWNY_SOC",
+    ingestionMode: input.ingestionMode === "udm" ? "udm" : "unstructured",
   });
 }
 
 export async function testIntegrationChannel(input: IntegrationChannelSetting & { tenantId: string }) {
-  if (!input.endpoint.trim()) throw new Error("Endpoint is required before testing.");
   const existing = (await listSettingsByPrefix(input.tenantId, "integration."))[`integration.${input.channel}`] ?? {};
   const currentCredential = typeof existing.credential === "string" ? existing.credential : "";
   const credential = input.credential.trim() || currentCredential;
+  if (input.channel === "google_secops") {
+    await testGoogleSecOpsIntegration(input, credential);
+    return;
+  }
+  if (!input.endpoint.trim()) throw new Error("Endpoint is required before testing.");
   const delivery: IntegrationDelivery = {
     id: `delivery-${randomUUID()}`,
     channel: input.channel,
@@ -1233,6 +1251,49 @@ export async function testIntegrationChannel(input: IntegrationChannelSetting & 
     await recordDelivery({ ...delivery, state: "failed", error: detail }, input.tenantId);
     throw new Error(detail);
   }
+}
+
+async function testGoogleSecOpsIntegration(
+  input: IntegrationChannelSetting & { tenantId: string },
+  credential: string,
+) {
+  const target = input.endpoint.trim() || "https://malachiteingestion-pa.googleapis.com";
+  const delivery: IntegrationDelivery = {
+    id: `delivery-${randomUUID()}`,
+    channel: "google_secops",
+    target,
+    state: "queued",
+    attempts: 1,
+    lastAttemptAt: new Date().toISOString(),
+    externalRef: "test-google-secops",
+  };
+  try {
+    const result = await sendGoogleSecOpsLogs(googleSecOpsConfig(input, credential), [{
+      id: "tawny-soc-integration-test",
+      kind: "telemetry",
+      eventType: "IntegrationTest",
+      title: "Tawny-SOC Google SecOps integration test",
+      severity: "low",
+      timestamp: new Date().toISOString(),
+      source: "tawny",
+    }]);
+    await recordDelivery({ ...delivery, target: result.endpoint, state: "delivered" }, input.tenantId);
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : "Google SecOps integration test failed.";
+    await recordDelivery({ ...delivery, state: "failed", error: detail }, input.tenantId);
+    throw new Error(detail);
+  }
+}
+
+function googleSecOpsConfig(input: IntegrationChannelSetting, credential: string): GoogleSecOpsConfig {
+  return {
+    endpoint: input.endpoint,
+    customerId: input.customerId?.trim() ?? "",
+    namespace: input.namespace?.trim() || "tawny-soc",
+    logType: input.logType?.trim() || "TAWNY_SOC",
+    ingestionMode: input.ingestionMode === "udm" ? "udm" : "unstructured",
+    credential,
+  };
 }
 
 export async function listSocSettings(tenantId: string): Promise<SocSettings> {
@@ -1538,7 +1599,7 @@ function normalizeApiTokenScopes(values: unknown, role: ApiTokenRole): ApiTokenS
 }
 
 function normalizeRoutingSetting(value: SocSettings["routing"]): SocSettings["routing"] {
-  const channels: IntegrationDelivery["channel"][] = ["email", "slack", "webhook", "sentinel", "wazuh"];
+  const channels: IntegrationDelivery["channel"][] = ["email", "slack", "webhook", "sentinel", "wazuh", "google_secops"];
   const normalizeChannels = (input: unknown, fallback = "") => {
     const selected = Array.isArray(input) ? input : fallback ? [fallback] : [];
     return selected
@@ -1717,11 +1778,67 @@ export async function ingestTawny(payload: IngestPayload) {
     await writeJson(alertsPath, mergedAlerts);
   }
 
+  const forwarding = await forwardIngestedLogsToGoogleSecOps(
+    cleanText(agent.tenant_id ?? payload.tenant_id, ""),
+    [...nextEvents, ...nextAlerts],
+  );
+
   return {
     accepted: nextEvents.length + nextAlerts.length,
     alerts: nextAlerts.length,
     events: nextEvents.length,
+    googleSecOps: forwarding,
   };
+}
+
+async function forwardIngestedLogsToGoogleSecOps(tenantId: string, records: SocEvent[]) {
+  if (!tenantId || records.length === 0) return { enabled: false, forwarded: 0 };
+
+  let target = "https://malachiteingestion-pa.googleapis.com";
+  try {
+    const value = (await listSettingsByPrefix(tenantId, "integration.google_secops"))["integration.google_secops"] ?? {};
+    if (value.enabled !== true) return { enabled: false, forwarded: 0 };
+    const credential = typeof value.credential === "string" ? value.credential : "";
+    const setting: IntegrationChannelSetting = {
+      channel: "google_secops",
+      enabled: true,
+      endpoint: typeof value.endpoint === "string" ? value.endpoint : "",
+      credential: "",
+      credentialConfigured: credential.length > 0,
+      customerId: typeof value.customerId === "string" ? value.customerId : "",
+      namespace: typeof value.namespace === "string" ? value.namespace : "tawny-soc",
+      logType: typeof value.logType === "string" ? value.logType : "TAWNY_SOC",
+      ingestionMode: value.ingestionMode === "udm" ? "udm" : "unstructured",
+    };
+    const result = await sendGoogleSecOpsLogs(googleSecOpsConfig(setting, credential), records);
+    target = result.endpoint;
+    await recordDelivery({
+      id: `delivery-${randomUUID()}`,
+      channel: "google_secops",
+      target,
+      state: "delivered",
+      attempts: 1,
+      lastAttemptAt: new Date().toISOString(),
+      externalRef: `${result.entries}-logs-${result.batches}-batches`,
+    }, tenantId);
+    return { enabled: true, forwarded: result.entries, batches: result.batches };
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : "Google SecOps forwarding failed.";
+    try {
+      await recordDelivery({
+        id: `delivery-${randomUUID()}`,
+        channel: "google_secops",
+        target,
+        state: "failed",
+        attempts: 1,
+        lastAttemptAt: new Date().toISOString(),
+        error: detail,
+      }, tenantId);
+    } catch {
+      // Ingestion remains available even if the delivery log database is unavailable.
+    }
+    return { enabled: true, forwarded: 0, error: detail };
+  }
 }
 
 export type SocActor = {
