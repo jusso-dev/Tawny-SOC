@@ -491,29 +491,35 @@ function cleanText(value: unknown, fallback: string) {
   return text.length > 0 ? text : fallback;
 }
 
-export async function listEvents() {
+export async function listEvents(tenantId?: string) {
   try {
-    const rows = await db.select().from(schema.socEvent).orderBy(desc(schema.socEvent.timestamp)).limit(1000);
+    const rows = tenantId
+      ? await db.select().from(schema.socEvent).where(eq(schema.socEvent.tenantId, tenantId)).orderBy(desc(schema.socEvent.timestamp)).limit(1000)
+      : await db.select().from(schema.socEvent).orderBy(desc(schema.socEvent.timestamp)).limit(1000);
     return rows.map(fromDbEvent);
   } catch {
     const events = await readJson<SocEvent[]>(eventsPath, []);
-    return events.sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp));
+    return events.filter((event) => !tenantId || event.tenantId === tenantId).sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp));
   }
 }
 
-export async function listAlerts() {
+export async function listAlerts(tenantId?: string) {
   try {
-    const rows = await db.select().from(schema.socAlert).orderBy(desc(schema.socAlert.timestamp)).limit(500);
+    const rows = tenantId
+      ? await db.select().from(schema.socAlert).where(eq(schema.socAlert.tenantId, tenantId)).orderBy(desc(schema.socAlert.timestamp)).limit(500)
+      : await db.select().from(schema.socAlert).orderBy(desc(schema.socAlert.timestamp)).limit(500);
     return rows.map(fromDbAlert);
   } catch {
     const alerts = await readJson<SocAlert[]>(alertsPath, []);
-    return alerts.sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp));
+    return alerts.filter((alert) => !tenantId || alert.tenantId === tenantId).sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp));
   }
 }
 
-export async function listIncidents() {
+export async function listIncidents(tenantId?: string) {
   try {
-    const rows = await db.select().from(schema.socIncident).orderBy(desc(schema.socIncident.updatedAt)).limit(500);
+    const rows = tenantId
+      ? await db.select().from(schema.socIncident).where(eq(schema.socIncident.tenantId, tenantId)).orderBy(desc(schema.socIncident.updatedAt)).limit(500)
+      : await db.select().from(schema.socIncident).orderBy(desc(schema.socIncident.updatedAt)).limit(500);
     if (!rows.length) return [];
 
     const incidentIds = rows.map((row) => row.id);
@@ -555,9 +561,11 @@ export async function listIncidents() {
   }
 }
 
-export async function listDeliveryLog() {
+export async function listDeliveryLog(tenantId?: string) {
   try {
-    const rows = await db.select().from(schema.socDeliveryLog).orderBy(desc(schema.socDeliveryLog.lastAttemptAt)).limit(100);
+    const rows = tenantId
+      ? await db.select().from(schema.socDeliveryLog).where(eq(schema.socDeliveryLog.tenantId, tenantId)).orderBy(desc(schema.socDeliveryLog.lastAttemptAt)).limit(100)
+      : await db.select().from(schema.socDeliveryLog).orderBy(desc(schema.socDeliveryLog.lastAttemptAt)).limit(100);
     return rows.map(fromDbDelivery);
   } catch {
     return [];
@@ -932,14 +940,14 @@ export async function deleteApiToken(tenantId: string, tokenId: string, actor?: 
   }
 }
 
-export async function validateApiToken(secret: string, requiredScope: ApiTokenScope) {
+export async function validateApiToken(secret: string, requiredScope?: ApiTokenScope) {
   const hash = hashApiToken(secret);
   const [row] = await db.select().from(schema.socApiToken).where(eq(schema.socApiToken.tokenHash, hash)).limit(1);
   if (!row || row.status !== "active") return null;
   if (row.expiresAt && row.expiresAt.getTime() <= Date.now()) return null;
   const role = normalizeApiTokenRole(row.role);
   const scopes = normalizeApiTokenScopes(row.scopes, role);
-  if (!scopes.includes(requiredScope)) return null;
+  if (requiredScope && !scopes.includes(requiredScope)) return null;
   await db.update(schema.socApiToken).set({ lastUsedAt: new Date(), updatedAt: new Date() }).where(eq(schema.socApiToken.id, row.id));
   return { id: row.id, tenantId: row.tenantId, role, scopes };
 }
@@ -1851,7 +1859,7 @@ export type SocActor = {
 export async function assignAlert(alertId: string, actor: SocActor) {
   await db.update(schema.socAlert)
     .set({ assignee: actor.name, status: "triaging" })
-    .where(eq(schema.socAlert.id, alertId));
+    .where(and(eq(schema.socAlert.id, alertId), eq(schema.socAlert.tenantId, actor.tenantId)));
   await recordTimeline({
     tenantId: actor.tenantId,
     alertId,
@@ -1864,7 +1872,7 @@ export async function assignAlert(alertId: string, actor: SocActor) {
 export async function updateAlertStatus(alertId: string, status: SocAlert["status"], actor: SocActor, detail?: string) {
   await db.update(schema.socAlert)
     .set({ status })
-    .where(eq(schema.socAlert.id, alertId));
+    .where(and(eq(schema.socAlert.id, alertId), eq(schema.socAlert.tenantId, actor.tenantId)));
   await recordTimeline({
     tenantId: actor.tenantId,
     alertId,
@@ -1875,10 +1883,10 @@ export async function updateAlertStatus(alertId: string, status: SocAlert["statu
 }
 
 export async function createCaseForAlert(alertId: string, actor: SocActor) {
-  const alert = (await listAlerts()).find((item) => item.id === alertId);
+  const alert = (await listAlerts(actor.tenantId)).find((item) => item.id === alertId);
   if (!alert) throw new Error("Alert not found.");
 
-  const existing = await db.select().from(schema.socIncident).limit(1000);
+  const existing = await db.select().from(schema.socIncident).where(eq(schema.socIncident.tenantId, actor.tenantId)).limit(1000);
   const incident = createIncidentFromAlert({ ...alert, tenantId: alert.tenantId ?? actor.tenantId }, actor, existing.length);
 
   await db.insert(schema.socIncident).values({
@@ -1929,7 +1937,7 @@ export async function createCaseForAlert(alertId: string, actor: SocActor) {
 export async function assignIncident(incidentId: string, actor: SocActor) {
   await db.update(schema.socIncident)
     .set({ assignee: actor.name, updatedAt: new Date() })
-    .where(eq(schema.socIncident.id, incidentId));
+    .where(and(eq(schema.socIncident.id, incidentId), eq(schema.socIncident.tenantId, actor.tenantId)));
   await recordTimeline({
     tenantId: actor.tenantId,
     incidentId,
@@ -1942,7 +1950,7 @@ export async function assignIncident(incidentId: string, actor: SocActor) {
 export async function updateIncidentStatus(incidentId: string, status: SocIncident["status"], actor: SocActor) {
   await db.update(schema.socIncident)
     .set({ status, updatedAt: new Date() })
-    .where(eq(schema.socIncident.id, incidentId));
+    .where(and(eq(schema.socIncident.id, incidentId), eq(schema.socIncident.tenantId, actor.tenantId)));
   await recordTimeline({
     tenantId: actor.tenantId,
     incidentId,
@@ -1953,6 +1961,9 @@ export async function updateIncidentStatus(incidentId: string, status: SocIncide
 }
 
 export async function addIncidentTask(incidentId: string, actor: SocActor, title = "Review new evidence") {
+  const [incident] = await db.select({ id: schema.socIncident.id }).from(schema.socIncident)
+    .where(and(eq(schema.socIncident.id, incidentId), eq(schema.socIncident.tenantId, actor.tenantId))).limit(1);
+  if (!incident) throw new Error("Case not found.");
   await db.insert(schema.socTask).values({
     id: `task-${randomUUID()}`,
     tenantId: actor.tenantId,
@@ -1975,6 +1986,9 @@ export async function addIncidentTask(incidentId: string, actor: SocActor, title
 export async function runPlaybookForIncident(incidentId: string, playbookId: string | undefined, actor: SocActor) {
   const playbook = playbooks.find((item) => item.id === playbookId) ?? playbooks[0];
   if (!playbook) throw new Error("No playbook is configured.");
+  const [incident] = await db.select({ id: schema.socIncident.id }).from(schema.socIncident)
+    .where(and(eq(schema.socIncident.id, incidentId), eq(schema.socIncident.tenantId, actor.tenantId))).limit(1);
+  if (!incident) throw new Error("Case not found.");
   const dueBase = Date.now() + 45 * 60_000;
   await db.insert(schema.socTask).values(playbook.phases.map((phase, index) => ({
     id: `task-${randomUUID()}`,
@@ -1999,7 +2013,7 @@ export async function runPlaybookForIncident(incidentId: string, playbookId: str
 export async function markIncidentKelpieStatus(incidentId: string, actor: SocActor, status: SocIncident["kelpieSyncStatus"], detail: string, kelpieCaseId?: string, kelpieUrl?: string) {
   await db.update(schema.socIncident)
     .set({ kelpieSyncStatus: status, kelpieCaseId, kelpieUrl, updatedAt: new Date() })
-    .where(eq(schema.socIncident.id, incidentId));
+    .where(and(eq(schema.socIncident.id, incidentId), eq(schema.socIncident.tenantId, actor.tenantId)));
   await recordTimeline({
     tenantId: actor.tenantId,
     incidentId,

@@ -1,15 +1,12 @@
 import { NextResponse } from "next/server";
+import { authenticateApiRequest } from "@/lib/api-auth";
 import { searchInputFromParams, searchRecords } from "@/lib/search";
-import { getSession } from "@/lib/session";
-import { listAlerts, validateApiToken } from "@/lib/store";
+import { listAlerts } from "@/lib/store";
 
 export async function GET(request: Request) {
-  if (!await getSession()) {
-    const authorization = request.headers.get("authorization") ?? "";
-    const bearerToken = authorization.startsWith("Bearer ") ? authorization.slice("Bearer ".length).trim() : "";
-    if (!bearerToken || !await validateApiToken(bearerToken, "alerts:read")) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  }
-  const alerts = await listAlerts();
+  const principal = await authenticateApiRequest(request, "alerts:read", { allowSession: true });
+  if (!principal) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  const alerts = await listAlerts(principal.tenantId);
   const result = searchRecords(alerts, searchInputFromParams(new URL(request.url).searchParams), { defaultDataset: "alerts" });
 
   if (!result.ok) {

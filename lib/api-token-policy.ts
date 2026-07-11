@@ -9,6 +9,9 @@ export const apiTokenScopes = [
   { id: "detections:write", label: "Write detections", detail: "Import, duplicate, disable, and tune detections." },
   { id: "threat-intel:read", label: "Read threat intel", detail: "Read IOC feeds and indicators." },
   { id: "threat-intel:write", label: "Write threat intel", detail: "Create feeds and sync indicators." },
+  { id: "playbooks:read", label: "Read playbooks", detail: "Inspect SOAR playbooks, plans, and run history." },
+  { id: "playbooks:run", label: "Run playbooks", detail: "Start SOAR runs and execute non-destructive automation." },
+  { id: "playbooks:approve", label: "Approve response actions", detail: "Approve gated containment and response actions." },
   { id: "settings:read", label: "Read settings", detail: "Read tenant configuration and audit state." },
 ] as const;
 
@@ -17,6 +20,7 @@ export type ApiTokenRole = "member" | "admin" | "owner";
 export type ApiTokenStatus = "active" | "revoked";
 
 export function allowedApiTokenScopesForRole(role: ApiTokenRole): ApiTokenScope[] {
-  if (role === "owner" || role === "admin") return apiTokenScopes.map((scope) => scope.id);
-  return ["ingest:write", "events:read", "alerts:read", "cases:read", "threat-intel:read"];
+  if (role === "owner") return apiTokenScopes.map((scope) => scope.id);
+  if (role === "admin") return apiTokenScopes.map((scope) => scope.id).filter((scope) => scope !== "playbooks:approve");
+  return ["ingest:write", "events:read", "alerts:read", "cases:read", "threat-intel:read", "playbooks:read"];
 }

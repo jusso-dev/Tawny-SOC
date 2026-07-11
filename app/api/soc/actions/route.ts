@@ -21,7 +21,6 @@ import {
   listIncidents,
   markIncidentKelpieStatus,
   recordDelivery,
-  runPlaybookForIncident,
   saveConnectorInstance,
   saveIntegrationChannel,
   saveRetentionPolicy,
@@ -43,6 +42,7 @@ import {
   type IntegrationChannelSetting,
   type SocActor,
 } from "@/lib/store";
+import { startSoarRun } from "@/lib/soar";
 import { saveAiSettings, testAiConnection, type AiSettingsInput } from "@/lib/ai";
 import { parseAiProviderId } from "@/lib/ai/settings";
 import { disableSigmaRule, duplicateSigmaRule, importSigmaRule } from "@/lib/sigma";
@@ -63,6 +63,9 @@ const validApiTokenScopes = new Set<ApiTokenScope>([
   "detections:write",
   "threat-intel:read",
   "threat-intel:write",
+  "playbooks:read",
+  "playbooks:run",
+  "playbooks:approve",
   "settings:read",
 ]);
 
@@ -123,8 +126,15 @@ export async function POST(request: Request) {
     }
     if (action === "run-playbook") {
       requirePermission(actor.role, "case.write");
-      await runPlaybookForIncident(required(body.incidentId, "incidentId"), typeof body.playbookId === "string" ? body.playbookId : undefined, actor);
-      return ok("Playbook tasks created.");
+      const run = await startSoarRun({
+        tenantId: actor.tenantId,
+        incidentId: required(body.incidentId, "incidentId"),
+        playbookId: typeof body.playbookId === "string" ? body.playbookId : "incident-response",
+        dryRun: false,
+        trigger: "manual",
+        actor,
+      });
+      return ok(run.status === "awaiting_approval" ? "SOAR run started; response actions require approval." : "SOAR run completed.", { runId: run.id, runStatus: run.status });
     }
     if (action === "sync-incident-kelpie" || action === "sync-comments") {
       requirePermission(actor.role, "integration.write");

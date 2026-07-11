@@ -43,6 +43,7 @@ The SOC workspace includes:
 - UEBA Behavior: deterministic behavior records that convert low-level telemetry into explainable user, host, process, network, privilege, data access, and detection-context activity.
 - Threat Intelligence: feed management and searchable, sortable, filterable, paginated IOC browser for STIX, OpenIOC, CSV, TXT, MISP, OTX, URLhaus, and custom URL feeds.
 - Playbooks: ordered SOC workflows for malware, suspicious PowerShell, new admin user, suspicious outbound IP, credential theft, host isolation, and suspicious URL style investigations.
+- SOAR automation: persisted playbook runs, deterministic action classification, automatic YAAQL investigation steps, analyst task handoff, dry-run planning, response approvals, and audited execution history.
 - Search / Hunt: YAAQL-powered enterprise hunt workspace for event type, host, user, process, hash, IP, domain, time, and payload-path queries, with examples, field pivots, saved searches, and clickable saved-search loading.
 - Integrations: email, Slack, webhook, Microsoft Sentinel, Google Security Operations, Wazuh, Kelpie, connector health, endpoint/token/credential configuration, delivery tests, and delivery state.
 - SOC Settings: split settings subpages for severity mapping, notification routing, suppression, threat intel TTL, case numbering, SLAs, role permissions, team access, API tokens, retention, compliance reports, and audit logs.
@@ -88,6 +89,74 @@ Configure Tawny with:
 For bearer-token protection, create a tenant API token in `Settings -> API tokens` with the `ingest:write` scope, then set `Tawny:TawnySoc:ApiToken` in Tawny. The legacy `TAWNY_SOC_INGEST_TOKEN` environment variable is still supported for simple local collector protection.
 
 `GET /api/events` accepts a session cookie or a bearer token with `events:read`. `GET /api/alerts` accepts a session cookie or a bearer token with `alerts:read`.
+
+## Agent API and MCP
+
+Coding agents can hunt and investigate through a tenant-scoped REST API or the Streamable HTTP MCP endpoint. Create a dedicated API token under `Settings -> API tokens`; give read-only agents only `events:read`, `alerts:read`, `cases:read`, `threat-intel:read`, and `playbooks:read`.
+
+Discovery endpoints:
+
+- `GET /api/v1` describes the agent surface.
+- `GET /api/v1/openapi.json` returns an OpenAPI 3.1 document.
+- `POST /api/mcp` is the MCP Streamable HTTP endpoint (protocol revision `2025-11-25`, stateless JSON responses; no standalone SSE stream).
+
+REST examples:
+
+```bash
+curl -H "Authorization: Bearer $TAWNY_SOC_TOKEN" \
+  "http://localhost:3001/api/v1/hunt?q=host:win-*%20and%20severity%20in%20(critical,%20high)&range=24h&limit=100"
+
+curl -H "Authorization: Bearer $TAWNY_SOC_TOKEN" \
+  "http://localhost:3001/api/v1/cases?status=investigating"
+
+curl -X POST -H "Authorization: Bearer $TAWNY_SOC_TOKEN" -H "Content-Type: application/json" \
+  -d '{"incidentId":"case-id","dryRun":true}' \
+  "http://localhost:3001/api/v1/playbooks/incident-response/runs"
+```
+
+The MCP server exposes the following tools. Tool discovery is filtered to the scopes on the presented token:
+
+- `tawny_hunt`: run tenant-scoped YAAQL searches across alerts and telemetry.
+- `tawny_get_alert`: pull alert payload, detection, confidence, and ATT&CK context.
+- `tawny_list_cases` and `tawny_get_case`: inspect cases, tasks, comments, observables, and timelines.
+- `tawny_search_threat_intel`: search active tenant indicators.
+- `tawny_list_playbooks`: inspect phases, actions, and automation characteristics.
+- `tawny_run_playbook`: preview by default or start a persisted run with `playbooks:run`.
+- `tawny_get_playbook_run`: inspect action results and approval state.
+- `tawny_approve_response`: approve one gated action using the owner-only `playbooks:approve` scope.
+
+A typical MCP client entry is:
+
+```json
+{
+  "mcpServers": {
+    "tawny-soc": {
+      "url": "http://localhost:3001/api/mcp",
+      "headers": {
+        "Authorization": "Bearer tawny_replace_me"
+      }
+    }
+  }
+}
+```
+
+Client configuration keys vary by MCP host. Remote deployments should use HTTPS and set `MCP_ALLOWED_ORIGINS` to a comma-separated allowlist if browser-based MCP clients connect from other origins.
+
+SOAR safety defaults:
+
+- Agent playbook calls are dry runs unless `dryRun` is explicitly set to `false`.
+- Execution requires `playbooks:run`, available only to admin or owner tokens.
+- Isolation, blocking, disabling, revocation, quarantine, and similar response actions always pause in `awaiting_approval`.
+- Approval requires the owner-only `playbooks:approve` scope and a written reason.
+- Approval is recorded and audited, but external containment is not reported as dispatched until a response connector is configured.
+
+After pulling a version that introduces or changes SOAR persistence, apply its database migration before starting the app:
+
+```bash
+docker compose up -d db
+pnpm db:migrate
+pnpm dev
+```
 
 ## Kelpie Integration
 
@@ -206,7 +275,7 @@ Available settings sections:
 
 ## Playbook Model
 
-Playbooks are ordered workflows with phases, owners, objectives, evidence requirements, and optional response actions. Running a playbook against a case creates case tasks in the SOC workflow layer.
+Playbooks are ordered workflows with phases, owners, objectives, evidence requirements, and optional response actions. A dry run returns the proposed action graph without persistence. Execution persists the run, completes safe hunt/enrichment steps, creates case tasks for analyst work, and pauses response actions for explicit approval.
 
 ## Alert-To-Case Workflow
 

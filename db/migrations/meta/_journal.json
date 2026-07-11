@@ -50,6 +50,13 @@
       "when": 1780034000000,
       "tag": "0006_add_api_tokens",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1783749600000,
+      "tag": "0007_add_soar_runs",
+      "breakpoints": true
     }
   ]
 }

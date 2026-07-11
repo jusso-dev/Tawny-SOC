@@ -165,6 +165,47 @@ export const socPlaybook = pgTable("soc_playbook", {
   index("soc_playbook_tenant_enabled_idx").on(table.tenantId, table.enabled),
 ]);
 
+export const socPlaybookRun = pgTable("soc_playbook_run", {
+  id: text("id").primaryKey(),
+  tenantId: text("tenant_id").notNull(),
+  playbookId: text("playbook_id").notNull(),
+  playbookName: text("playbook_name").notNull(),
+  incidentId: text("incident_id").notNull().references(() => socIncident.id, { onDelete: "cascade" }),
+  status: text("status").notNull(),
+  trigger: text("trigger").notNull().default("manual"),
+  dryRun: boolean("dry_run").notNull().default(true),
+  actorId: text("actor_id"),
+  actorName: text("actor_name").notNull(),
+  summary: jsonb("summary").$type<Record<string, unknown>>().notNull().default({}),
+  startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+}, (table) => [
+  index("soc_playbook_run_tenant_started_idx").on(table.tenantId, table.startedAt),
+  index("soc_playbook_run_incident_idx").on(table.incidentId),
+]);
+
+export const socPlaybookAction = pgTable("soc_playbook_action", {
+  id: text("id").primaryKey(),
+  tenantId: text("tenant_id").notNull(),
+  runId: text("run_id").notNull().references(() => socPlaybookRun.id, { onDelete: "cascade" }),
+  incidentId: text("incident_id").notNull().references(() => socIncident.id, { onDelete: "cascade" }),
+  phase: text("phase").notNull(),
+  position: integer("position").notNull(),
+  action: text("action").notNull(),
+  kind: text("kind").notNull(),
+  status: text("status").notNull(),
+  approvalRequired: boolean("approval_required").notNull().default(false),
+  input: jsonb("input").$type<Record<string, unknown>>().notNull().default({}),
+  output: jsonb("output").$type<Record<string, unknown>>().notNull().default({}),
+  approvedBy: text("approved_by"),
+  approvedAt: timestamp("approved_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+}, (table) => [
+  index("soc_playbook_action_run_position_idx").on(table.runId, table.position),
+  index("soc_playbook_action_tenant_status_idx").on(table.tenantId, table.status),
+]);
+
 export const socTask = pgTable("soc_task", {
   id: text("id").primaryKey(),
   tenantId: text("tenant_id").notNull(),

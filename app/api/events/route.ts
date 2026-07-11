@@ -1,15 +1,12 @@
 import { NextResponse } from "next/server";
+import { authenticateApiRequest } from "@/lib/api-auth";
 import { searchInputFromParams, searchRecords } from "@/lib/search";
-import { getSession } from "@/lib/session";
-import { listEvents, validateApiToken } from "@/lib/store";
+import { listEvents } from "@/lib/store";
 
 export async function GET(request: Request) {
-  if (!await getSession()) {
-    const authorization = request.headers.get("authorization") ?? "";
-    const bearerToken = authorization.startsWith("Bearer ") ? authorization.slice("Bearer ".length).trim() : "";
-    if (!bearerToken || !await validateApiToken(bearerToken, "events:read")) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  }
-  const events = await listEvents();
+  const principal = await authenticateApiRequest(request, "events:read", { allowSession: true });
+  if (!principal) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  const events = await listEvents(principal.tenantId);
   const result = searchRecords(events, searchInputFromParams(new URL(request.url).searchParams), { defaultDataset: "telemetry" });
 
   if (!result.ok) {

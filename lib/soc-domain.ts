@@ -20,6 +20,7 @@ import {
   listThreatIntelMatches,
 } from "@/lib/store";
 import { listSigmaRules } from "@/lib/sigma";
+import { listSoarRuns } from "@/lib/soar";
 import type {
   Severity,
   SocAlert,
@@ -105,12 +106,13 @@ export async function getSocData() {
     auditLogs,
     retentionPolicies,
     evidence,
+    soarRuns,
   ] = await Promise.all([
-    listAlerts(),
-    listEvents(),
-    listIncidents(),
+    listAlerts(tenantId),
+    listEvents(tenantId),
+    listIncidents(tenantId),
     listSigmaRules(),
-    listDeliveryLog(),
+    listDeliveryLog(tenantId),
     listThreatIntelFeeds(tenantId),
     listThreatIntelMatches(tenantId),
     getKelpieIntegration(tenantId),
@@ -123,6 +125,7 @@ export async function getSocData() {
     listAuditLogs(tenantId),
     listRetentionPolicies(tenantId),
     listEvidence(tenantId),
+    listSoarRuns(tenantId),
   ]);
   const enrichedAlerts = alerts.map((alert) => extractAlertContext(alert, indicators)).sort((a, b) => severityRank[b.severity] - severityRank[a.severity] || Date.parse(b.timestamp) - Date.parse(a.timestamp));
   return {
@@ -143,6 +146,7 @@ export async function getSocData() {
     auditLogs,
     retentionPolicies,
     evidence,
+    soarRuns,
     settings,
     tenantId,
     deliveryLog: deliveries,

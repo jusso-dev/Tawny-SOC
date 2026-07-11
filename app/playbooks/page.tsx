@@ -5,7 +5,7 @@ import { PageHeader, SocShell } from "@/components/soc-shell";
 import { getSocData, severityClass } from "@/lib/soc-domain";
 
 export default async function PlaybooksPage() {
-  const { playbooks, incidents } = await getSocData();
+  const { playbooks, incidents, soarRuns } = await getSocData();
   const targetIncident = incidents[0];
 
   return (
@@ -51,6 +51,23 @@ export default async function PlaybooksPage() {
           </article>
         ))}
       </div>
+
+      <section className="panel">
+        <div className="panel-heading">
+          <div>
+            <p className="eyebrow">SOAR run history</p>
+            <h2>Automation, approvals, and analyst handoffs</h2>
+            <p>Hunt and enrichment steps run automatically. Containment remains approval-gated and records an audit trail.</p>
+          </div>
+        </div>
+        <div className="timeline-list">
+          {soarRuns.length ? soarRuns.map((run) => (
+            <p key={run.id}>
+              <strong>{run.playbookName}</strong> {run.status.replace("_", " ")} · {String(run.summary.totalActions ?? 0)} actions · {String(run.summary.approvalRequired ?? 0)} approval-gated · {run.trigger}
+            </p>
+          )) : <p>No SOAR runs yet.</p>}
+        </div>
+      </section>
     </SocShell>
   );
 }
