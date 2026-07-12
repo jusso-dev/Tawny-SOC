@@ -9,6 +9,7 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "screenshot": "tsx scripts/capture-readme-screenshot.ts",
     "seed": "node scripts/seed-local.mjs",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
@@ -33,6 +34,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.1",
     "@types/node": "^22.20.0",
     "@types/node-cron": "^3.0.11",
     "@types/react": "^19.2.17",

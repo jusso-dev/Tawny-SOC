@@ -2,6 +2,10 @@
 
 AI-focused SOC/SIEM workspace for Tawny. It receives Tawny alerts and telemetry as an HTTP log sink, enriches records with Sigma-style detections and threat intel context, and presents a modern analyst workspace for triage, cases, detection engineering, playbooks, hunting, and Kelpie handoff.
 
+## Interface preview
+
+![Tawny-SOC sign-in screen](docs/screenshots/sign-in.png)
+
 ## Local Development
 
 Run Postgres in Docker, then run the Next.js 16 App Router dashboard with Turbopack via `pnpm dev`.
