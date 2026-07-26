@@ -19,6 +19,7 @@ import { listSigmaRules } from "@/lib/sigma";
 import { createIncidentFromAlert } from "@/lib/soc-workflows";
 import { playbooks } from "@/lib/rules";
 import { sendGoogleSecOpsLogs, type GoogleSecOpsConfig } from "@/lib/integrations/google-secops";
+import { isIndexableThreatIntelValue } from "@/lib/threat-intel-limits";
 import type {
   GoogleSecOpsIngestionMode,
   IngestPayload,
@@ -1371,6 +1372,7 @@ function parseThreatIntelIndicators(feed: typeof schema.socThreatIntelFeed.$infe
 
   const seen = new Set<string>();
   return indicators.filter((indicator) => {
+    if (!isIndexableThreatIntelValue(indicator.value)) return false;
     const key = `${indicator.type}:${indicator.value.toLowerCase()}`;
     if (seen.has(key)) return false;
     seen.add(key);
@@ -1382,7 +1384,6 @@ function parseThreatIntelIndicators(feed: typeof schema.socThreatIntelFeed.$infe
 }
 
 async function replaceThreatIntelIndicators(feed: typeof schema.socThreatIntelFeed.$inferSelect, indicators: ParsedThreatIndicator[]) {
-  await db.delete(schema.socThreatIntelIndicator).where(eq(schema.socThreatIntelIndicator.feedId, feed.id));
   const values = indicators.map((indicator) => ({
     id: threatIndicatorId(feed.tenantId, feed.id, indicator.type, indicator.value),
     tenantId: feed.tenantId,
@@ -1397,9 +1398,16 @@ async function replaceThreatIntelIndicators(feed: typeof schema.socThreatIntelFe
     expiresAt: indicator.expiresAt ?? null,
   }));
 
-  for (let index = 0; index < values.length; index += 500) {
-    await db.insert(schema.socThreatIntelIndicator).values(values.slice(index, index + 500));
-  }
+  await db.transaction(async (transaction) => {
+    await transaction
+      .delete(schema.socThreatIntelIndicator)
+      .where(eq(schema.socThreatIntelIndicator.feedId, feed.id));
+    for (let index = 0; index < values.length; index += 500) {
+      await transaction
+        .insert(schema.socThreatIntelIndicator)
+        .values(values.slice(index, index + 500));
+    }
+  });
 }
 
 function parseJsonThreatIndicators(parsed: unknown, sourceName: string, now: Date): ParsedThreatIndicator[] {
