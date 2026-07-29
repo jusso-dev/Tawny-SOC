@@ -22,9 +22,9 @@ export function ThemeToggle() {
   }
 
   return (
-    <button className="theme-toggle" type="button" onClick={toggle} aria-label="Toggle dark mode">
+    <button className="theme-toggle icon-only" type="button" onClick={toggle} aria-label="Toggle dark mode">
       {dark ? <Sun size={16} aria-hidden /> : <Moon size={16} aria-hidden />}
-      <span>{dark ? "Light" : "Dark"}</span>
+      <span className="sr-only">{dark ? "Light mode" : "Dark mode"}</span>
     </button>
   );
 }

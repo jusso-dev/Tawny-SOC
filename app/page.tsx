@@ -1,15 +1,45 @@
-import { AlertTriangle, ArrowRight, Clock3, RadioTower, ShieldAlert, Users } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowRight,
+  Clock3,
+  FolderKanban,
+  RadioTower,
+  ShieldAlert,
+  TrendingUp,
+  Users,
+} from "lucide-react";
 import Link from "next/link";
 import { PageHeader, SocShell } from "@/components/soc-shell";
 import { getSocData, relativeTime, severityClass } from "@/lib/soc-domain";
 
-function Metric({ label, value, detail }: { label: string; value: string | number; detail: string }) {
+function MetricCard({
+  label,
+  value,
+  detail,
+  icon: Icon,
+  tone = "default",
+}: {
+  label: string;
+  value: string | number;
+  detail: string;
+  icon: React.ComponentType<{ size?: number; "aria-hidden"?: boolean }>;
+  tone?: "default" | "critical" | "success" | "info";
+}) {
   return (
-    <div>
-      <span>{typeof value === "number" ? value.toLocaleString() : value}</span>
-      <p>{label}</p>
-      <small>{detail}</small>
-    </div>
+    <article className={`metric-card tone-${tone}`}>
+      <div className="metric-card-top">
+        <div>
+          <p className="metric-card-label">{label}</p>
+          <strong className="metric-card-value">
+            {typeof value === "number" ? value.toLocaleString() : value}
+          </strong>
+        </div>
+        <div className="metric-card-icon">
+          <Icon size={16} aria-hidden />
+        </div>
+      </div>
+      <p className="metric-card-detail">{detail}</p>
+    </article>
   );
 }
 
@@ -20,13 +50,17 @@ function TopList({ title, rows }: { title: string; rows: Array<{ name: string; c
         <h2>{title}</h2>
       </div>
       <div className="rank-list">
-        {rows.length ? rows.map((row, index) => (
-          <div key={`${title}-${row.name}`}>
-            <span>{index + 1}</span>
-            <strong>{row.name}</strong>
-            <em>{row.count}</em>
-          </div>
-        )) : <p className="muted-copy">No data yet.</p>}
+        {rows.length ? (
+          rows.map((row, index) => (
+            <div key={`${title}-${row.name}`}>
+              <span>{index + 1}</span>
+              <strong>{row.name}</strong>
+              <em>{row.count}</em>
+            </div>
+          ))
+        ) : (
+          <p className="muted-copy">No data yet.</p>
+        )}
       </div>
     </section>
   );
@@ -40,15 +74,44 @@ export default async function Home() {
     <SocShell active="/">
       <PageHeader
         eyebrow="SOC overview"
-        title="Tawny endpoint signals, grouped into an analyst-ready SIEM workspace."
-        description="Alert pressure, queue health, MITRE coverage, threat intel, and Kelpie sync state in one operational view."
+        title="Endpoint signals, ready for triage."
+        description="Alert pressure, queue health, MITRE coverage, threat intel, and Kelpie sync in one operational view."
+        actions={
+          <Link className="primary-action" href="/alerts">
+            Open alert queue <ArrowRight size={15} aria-hidden />
+          </Link>
+        }
       />
 
       <section className="metric-row soc-metrics" aria-label="SOC summary">
-        <Metric label="alert volume" value={overview.alertVolume} detail="from Tawny alerts and telemetry" />
-        <Metric label="incident volume" value={overview.incidentVolume} detail={`${overview.openCases} open cases`} />
-        <Metric label="critical/high alerts" value={overview.criticalHigh} detail={`${overview.affectedHosts} affected hosts`} />
-        <Metric label="alert-to-case rate" value={`${overview.alertToCaseRate}%`} detail="current conversion" />
+        <MetricCard
+          label="Alert volume"
+          value={overview.alertVolume}
+          detail="from Tawny alerts and telemetry"
+          icon={AlertTriangle}
+          tone="critical"
+        />
+        <MetricCard
+          label="Incident volume"
+          value={overview.incidentVolume}
+          detail={`${overview.openCases} open cases`}
+          icon={FolderKanban}
+          tone="info"
+        />
+        <MetricCard
+          label="Critical / high"
+          value={overview.criticalHigh}
+          detail={`${overview.affectedHosts} affected hosts`}
+          icon={ShieldAlert}
+          tone="critical"
+        />
+        <MetricCard
+          label="Alert-to-case rate"
+          value={`${overview.alertToCaseRate}%`}
+          detail="current conversion"
+          icon={TrendingUp}
+          tone="success"
+        />
       </section>
 
       <div className="grid overview-grid">
@@ -61,13 +124,27 @@ export default async function Home() {
             <AlertTriangle size={18} aria-hidden />
           </div>
           <div className="queue-health">
-            <div><strong>{overview.unassignedAlerts}</strong><span>Unassigned alerts</span></div>
-            <div><strong>{overview.staleAlerts}</strong><span>Stale alerts</span></div>
-            <div><strong>{overview.slaBreaches}</strong><span>SLA breaches</span></div>
-            <div><strong>{overview.noisyRules.length}</strong><span>Noisy rules</span></div>
+            <div>
+              <strong>{overview.unassignedAlerts}</strong>
+              <span>Unassigned alerts</span>
+            </div>
+            <div>
+              <strong>{overview.staleAlerts}</strong>
+              <span>Stale alerts</span>
+            </div>
+            <div>
+              <strong>{overview.slaBreaches}</strong>
+              <span>SLA breaches</span>
+            </div>
+            <div>
+              <strong>{overview.noisyRules.length}</strong>
+              <span>Noisy rules</span>
+            </div>
           </div>
           <div className="attention-list">
-            {overview.needsAttention.map((item) => <p key={item}>{item}</p>)}
+            {overview.needsAttention.map((item) => (
+              <p key={item}>{item}</p>
+            ))}
           </div>
         </section>
 
@@ -91,8 +168,12 @@ export default async function Home() {
                 ))}
               </div>
               <div className="chart-legend">
-                <span><b className="legend-alert" /> Alerts</span>
-                <span><b className="legend-case" /> Cases</span>
+                <span>
+                  <b className="legend-alert" /> Alerts
+                </span>
+                <span>
+                  <b className="legend-case" /> Cases
+                </span>
               </div>
             </>
           ) : (
@@ -121,12 +202,30 @@ export default async function Home() {
                 <p>{topAlert.aiSummary}</p>
               </div>
               <dl className="detail-grid">
-                <div><dt>Host</dt><dd>{topAlert.hostname ?? "unknown"}</dd></div>
-                <div><dt>User</dt><dd>{topAlert.user ?? "unknown"}</dd></div>
-                <div><dt>Process</dt><dd>{topAlert.process ?? "unknown"}</dd></div>
-                <div><dt>MITRE</dt><dd>{topAlert.mitreTechniques.join(", ") || "Needs mapping"}</dd></div>
-                <div><dt>TI matches</dt><dd>{topAlert.tiMatches?.length ?? 0}</dd></div>
-                <div><dt>Seen</dt><dd>{relativeTime(topAlert.timestamp)}</dd></div>
+                <div>
+                  <dt>Host</dt>
+                  <dd>{topAlert.hostname ?? "unknown"}</dd>
+                </div>
+                <div>
+                  <dt>User</dt>
+                  <dd>{topAlert.user ?? "unknown"}</dd>
+                </div>
+                <div>
+                  <dt>Process</dt>
+                  <dd>{topAlert.process ?? "unknown"}</dd>
+                </div>
+                <div>
+                  <dt>MITRE</dt>
+                  <dd>{topAlert.mitreTechniques.join(", ") || "Needs mapping"}</dd>
+                </div>
+                <div>
+                  <dt>TI matches</dt>
+                  <dd>{topAlert.tiMatches?.length ?? 0}</dd>
+                </div>
+                <div>
+                  <dt>Seen</dt>
+                  <dd>{relativeTime(topAlert.timestamp)}</dd>
+                </div>
               </dl>
               <Link className="primary-action" href={`/alerts/${topAlert.id}`}>
                 Open alert detail <ArrowRight size={15} aria-hidden />
@@ -135,7 +234,9 @@ export default async function Home() {
           ) : (
             <div className="empty-state">
               <ShieldAlert size={22} aria-hidden />
-              <p>No Tawny alerts have landed yet. Send Tawny telemetry to <code>POST /api/ingest/tawny</code>.</p>
+              <p>
+                No Tawny alerts have landed yet. Send Tawny telemetry to <code>POST /api/ingest/tawny</code>.
+              </p>
             </div>
           )}
         </section>
@@ -154,7 +255,9 @@ export default async function Home() {
                 <span className={severityClass(incident.severity)}>{incident.severity}</span>
                 <strong>{incident.number}</strong>
                 <p>{incident.title}</p>
-                <small>{incident.assignee ?? "Unassigned"} · {incident.kelpieSyncStatus.replace("_", " ")}</small>
+                <small>
+                  {incident.assignee ?? "Unassigned"} · {incident.kelpieSyncStatus.replace("_", " ")}
+                </small>
               </Link>
             ))}
           </div>

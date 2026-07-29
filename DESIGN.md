@@ -2,21 +2,20 @@
 
 ## Overview
 
-Tawny-SOC is a dense operational dashboard. It borrows Tawny's warm dark neutrals and amber action color, then adds restrained blue and red semantic accents for investigation state and critical risk. The interface should feel closer to a detection engineering workbench than a marketing analytics page.
+Tawny-SOC is a dense operational dashboard aligned to the free [shadcndashboard](https://github.com/shadcndashboard/shadcndashboard) shell: inset sidebar + bordered content stage, neutral shadcn tokens, and metric cards with icon wells. Semantic blue/red/green accents stay reserved for investigation state and critical risk.
 
 ## Theme
 
-Primary scene: a security engineer is watching endpoint telemetry and triaging alerts beside terminal windows during an evening investigation. Dark mode is the default because it reduces glare and fits the operational context.
+Primary scene: analyst workspace for endpoint telemetry triage. Light and dark both ship via the header theme toggle (class on `html`).
 
 ## Color
 
-Use OKLCH tokens. Avoid pure black and pure white.
+Use OKLCH tokens matching shadcn neutral palette.
 
-- Background: warm graphite
-- Sidebar: slightly lifted charcoal
-- Panel: quiet warm gray
-- Foreground: warm near-white
-- Accent: amber for primary action and active navigation
+- Background / surface: neutral light or charcoal
+- Sidebar + content: bordered inset panels on muted page background
+- Foreground: near-black / near-white
+- Accent: solid primary for active nav and primary actions
 - Investigation: muted blue for analyst and AI work
 - Critical: red only for true alert severity
 - Success: green only for healthy ingestion or completed actions
@@ -27,7 +26,7 @@ Use system UI fonts. Keep headings compact. Tables, rule metadata, IDs, and JSON
 
 ## Layout
 
-Use a persistent left navigation and a dense responsive dashboard grid. Avoid nested cards. Use full-width bands and bordered panels for operational views. Tables should remain readable on laptop widths.
+shadcn-style full layout: sticky left sidebar with grouped nav, sticky shell header (theme), dense content grid of bordered panels. Metric cards use label/value/icon. Tables stay readable on laptop widths.
 
 ## Components
 
