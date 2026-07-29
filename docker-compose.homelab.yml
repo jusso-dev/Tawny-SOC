@@ -1,0 +1,44 @@
+# Homelab / Portainer stack for 192.168.1.19
+# Port 3001 is used by Tawny web — SOC listens on 3014.
+name: tawny-soc
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: tawny_soc
+      POSTGRES_USER: tawny_soc
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tawny_soc}
+    volumes:
+      - tawny_soc_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tawny_soc -d tawny_soc"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgres://tawny_soc:${POSTGRES_PASSWORD:-tawny_soc}@db:5432/tawny_soc
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://192.168.1.19:3014}
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://192.168.1.19:3014}
+      TAWNY_SOC_INGEST_TOKEN: ${TAWNY_SOC_INGEST_TOKEN:-}
+      CRON_TIMEZONE: ${CRON_TIMEZONE:-Australia/Sydney}
+      NODE_ENV: production
+    ports:
+      - "3014:3001"
+    command: sh -c "pnpm db:migrate && pnpm start"
+
+volumes:
+  tawny_soc_pg:
