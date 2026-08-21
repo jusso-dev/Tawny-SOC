@@ -477,9 +477,10 @@ function parseAiSettingsInput(body: Record<string, unknown>): AiSettingsInput {
       sessionToken: optionalString(body.bedrockSessionToken),
     },
     agents: {
+      detect: body.agentDetect !== false,
       triage: body.agentTriage !== false,
-      enrichment: body.agentEnrichment !== false,
-      "case-writer": body.agentCaseWriter !== false,
+      hunt: body.agentHunt !== false,
+      respond: body.agentRespond !== false,
     },
   };
 }

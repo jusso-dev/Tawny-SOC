@@ -32,9 +32,10 @@ export function AiSettingsForm({ settings }: { settings: AiSettingsView }) {
           bedrockAccessKeyId: formData.get("bedrockAccessKeyId"),
           bedrockSecretAccessKey: formData.get("bedrockSecretAccessKey"),
           bedrockSessionToken: formData.get("bedrockSessionToken"),
+          agentDetect: formData.get("agentDetect") === "on",
           agentTriage: formData.get("agentTriage") === "on",
-          agentEnrichment: formData.get("agentEnrichment") === "on",
-          agentCaseWriter: formData.get("agentCaseWriter") === "on",
+          agentHunt: formData.get("agentHunt") === "on",
+          agentRespond: formData.get("agentRespond") === "on",
         }),
       });
       const body = await res.json().catch(() => ({})) as { message?: string; error?: string };
@@ -124,16 +125,20 @@ export function AiSettingsForm({ settings }: { settings: AiSettingsView }) {
       </div>
       <div className="config-grid">
         <label className="checkbox-field">
+          <input name="agentDetect" type="checkbox" defaultChecked={settings.agents.detect} />
+          <span>Detect agent — fuse related signals and map attack chains</span>
+        </label>
+        <label className="checkbox-field">
           <input name="agentTriage" type="checkbox" defaultChecked={settings.agents.triage} />
           <span>Triage agent — verdict, confidence, and next actions per alert</span>
         </label>
         <label className="checkbox-field">
-          <input name="agentEnrichment" type="checkbox" defaultChecked={settings.agents.enrichment} />
+          <input name="agentHunt" type="checkbox" defaultChecked={settings.agents.hunt} />
           <span>TI enrichment agent — indicator assessment and hunt pivots</span>
         </label>
         <label className="checkbox-field">
-          <input name="agentCaseWriter" type="checkbox" defaultChecked={settings.agents["case-writer"]} />
-          <span>Case writing agent — executive and technical case drafts</span>
+          <input name="agentRespond" type="checkbox" defaultChecked={settings.agents.respond} />
+          <span>Respond agent — plan containment and draft case reporting</span>
         </label>
       </div>
 

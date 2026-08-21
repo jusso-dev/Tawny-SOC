@@ -1,6 +1,7 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { z } from "zod";
 import { ingestTawny, validateApiToken } from "@/lib/store";
+import { runAgentMesh } from "@/lib/war-room";
 
 const IngestSchema = z.object({
   source: z.string().optional(),
@@ -48,5 +49,13 @@ export async function POST(request: Request) {
     }
     : parsed.data;
   const result = await ingestTawny(payload);
+  if (process.env.TAWNY_AGENT_AUTORUN !== "false" && result.tenantId && result.priorityAlertIds.length) {
+    const maxRuns = Math.min(25, Math.max(1, Number(process.env.TAWNY_AGENT_AUTORUN_MAX_PER_BATCH) || 5));
+    after(async () => {
+      for (const alertId of result.priorityAlertIds.slice(0, maxRuns)) {
+        await runAgentMesh({ tenantId: result.tenantId, alertId, actorName: "Tawny Agent Mesh", trigger: "automatic-ingest" }).catch(() => undefined);
+      }
+    });
+  }
   return NextResponse.json({ ok: true, ...result });
 }

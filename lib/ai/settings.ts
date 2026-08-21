@@ -3,12 +3,13 @@ import type { AiAgentId, AiProviderId, AiSettings, AiSettingsInput, AiSettingsVi
 
 export const AI_SETTING_KEY = "ai";
 
-export const aiAgentIds: AiAgentId[] = ["triage", "enrichment", "case-writer"];
+export const aiAgentIds: AiAgentId[] = ["detect", "triage", "hunt", "respond"];
 
 export const aiAgentLabels: Record<AiAgentId, string> = {
+  detect: "Detect agent",
   triage: "Triage agent",
-  enrichment: "Threat intel enrichment agent",
-  "case-writer": "Case writing agent",
+  hunt: "Hunt agent",
+  respond: "Respond agent",
 };
 
 export const aiSettingsDefaults: AiSettings = {
@@ -27,7 +28,7 @@ export const aiSettingsDefaults: AiSettings = {
     secretAccessKey: "",
     sessionToken: "",
   },
-  agents: { triage: true, enrichment: true, "case-writer": true },
+  agents: { detect: true, triage: true, hunt: true, respond: true },
 };
 
 export function parseAiProviderId(value: unknown): AiProviderId {
@@ -63,9 +64,10 @@ export function normalizeAiSettings(raw: Record<string, unknown>): AiSettings {
       sessionToken: str(bedrock.sessionToken),
     },
     agents: {
+      detect: agents.detect !== false,
       triage: agents.triage !== false,
-      enrichment: agents.enrichment !== false,
-      "case-writer": agents["case-writer"] !== false,
+      hunt: agents.hunt !== false && agents.enrichment !== false,
+      respond: agents.respond !== false && agents["case-writer"] !== false,
     },
   };
 }
@@ -108,9 +110,10 @@ export function mergeAiSettings(existing: AiSettings, input: AiSettingsInput): A
       sessionToken: str(input.bedrock.sessionToken) || existing.bedrock.sessionToken,
     },
     agents: {
+      detect: input.agents.detect !== false,
       triage: input.agents.triage !== false,
-      enrichment: input.agents.enrichment !== false,
-      "case-writer": input.agents["case-writer"] !== false,
+      hunt: input.agents.hunt !== false,
+      respond: input.agents.respond !== false,
     },
   };
 }

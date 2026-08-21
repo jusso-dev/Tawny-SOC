@@ -2459,6 +2459,225 @@ td .inline-action,
   line-height: 1.4;
 }
 
+.war-room-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(22rem, 0.85fr);
+  gap: 1.25rem;
+  align-items: end;
+  padding: 1.5rem;
+  border: 1px solid color-mix(in oklch, var(--blue) 28%, var(--border));
+  border-radius: var(--radius);
+  background:
+    radial-gradient(circle at 85% 0%, color-mix(in oklch, var(--blue) 15%, transparent), transparent 40%),
+    linear-gradient(135deg, var(--surface), var(--surface-2));
+}
+
+.war-room-hero h2 {
+  margin: 0.65rem 0 0.45rem;
+  font-size: clamp(1.35rem, 2.4vw, 2.1rem);
+  letter-spacing: -0.035em;
+}
+
+.war-room-hero p {
+  max-width: 48rem;
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.mesh-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 750;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.mesh-status i {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 999px;
+  background: var(--green);
+  box-shadow: 0 0 0 4px var(--green-soft);
+}
+
+.mesh-status.fallback i {
+  background: var(--chart-1);
+  box-shadow: 0 0 0 4px var(--orange-soft);
+}
+
+.mesh-launcher {
+  display: grid;
+  gap: 0.7rem;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: color-mix(in oklch, var(--surface) 88%, transparent);
+}
+
+.mesh-launcher label,
+.hunt-schedule-form label {
+  display: grid;
+  gap: 0.35rem;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.mesh-launcher select,
+.hunt-schedule-form input,
+.hunt-schedule-form select,
+.hunt-schedule-form textarea {
+  width: 100%;
+  min-height: 2.5rem;
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) - 2px);
+  background: var(--bg);
+  color: var(--text);
+  padding: 0.55rem 0.7rem;
+}
+
+.hunt-schedule-form textarea {
+  min-height: 5rem;
+  resize: vertical;
+}
+
+.agent-contract {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.65rem;
+  margin: 0.85rem 0;
+}
+
+.agent-contract article {
+  position: relative;
+  min-height: 10.5rem;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.agent-contract article > span {
+  position: absolute;
+  top: 0.8rem;
+  right: 0.8rem;
+  color: var(--faint);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.72rem;
+}
+
+.agent-contract svg { color: var(--blue); }
+.agent-contract h2 { margin: 1.2rem 0 0.35rem; font-size: 1rem; }
+.agent-contract p { margin: 0; color: var(--muted); font-size: 0.78rem; line-height: 1.45; }
+.agent-contract small { display: block; margin-top: 0.8rem; color: var(--text); font-size: 0.7rem; font-weight: 700; }
+
+.war-room-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.65fr) minmax(18rem, 0.65fr);
+  gap: 0.85rem;
+  align-items: start;
+}
+
+.agent-run-list { display: grid; gap: 0.55rem; }
+.agent-run-list details { border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2); overflow: hidden; }
+.agent-run-list summary { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 0.7rem; align-items: center; padding: 0.8rem; cursor: pointer; }
+.agent-run-list summary div strong,
+.agent-run-list summary div small { display: block; }
+.agent-run-list summary div strong { font-size: 0.84rem; }
+.agent-run-list summary div small { margin-top: 0.18rem; color: var(--muted); font-size: 0.7rem; }
+.agent-run-list summary > b { color: var(--muted); font-size: 0.72rem; }
+.run-state { padding: 0.25rem 0.45rem; border-radius: 999px; background: var(--green-soft); color: var(--green); font-size: 0.65rem; font-weight: 750; text-transform: uppercase; }
+.run-state.failed { background: var(--red-soft); color: var(--red); }
+.run-summary { margin: 0; padding: 0 0.8rem 0.75rem; color: var(--muted); font-size: 0.8rem; line-height: 1.5; }
+.run-steps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; border-top: 1px solid var(--border); background: var(--border); }
+.run-steps article { padding: 0.75rem; background: var(--surface); }
+.run-steps article > div { display: flex; gap: 0.35rem; align-items: center; }
+.run-steps article > div span { font-size: 0.72rem; font-weight: 800; }
+.run-steps article > div em { padding: 0.15rem 0.3rem; border-radius: 999px; background: var(--blue-soft); color: var(--blue); font-size: 0.6rem; font-style: normal; }
+.run-steps article > div b { margin-left: auto; font-size: 0.66rem; }
+.run-steps p { margin: 0.55rem 0; color: var(--muted); font-size: 0.7rem; line-height: 1.45; }
+.run-steps small { display: block; margin-top: 0.28rem; padding-left: 0.55rem; border-left: 2px solid var(--border); color: var(--text); font-size: 0.64rem; line-height: 1.35; }
+
+.hermes-callout p,
+.hermes-callout li { color: var(--muted); font-size: 0.8rem; line-height: 1.5; }
+.hermes-callout ul { padding-left: 1.1rem; }
+.hermes-callout .primary-action { width: 100%; justify-content: center; }
+
+.hunt-schedule-layout {
+  display: grid;
+  grid-template-columns: minmax(22rem, 0.75fr) minmax(0, 1.25fr);
+  gap: 0.85rem;
+  margin-top: 0.85rem;
+}
+
+.hunt-schedule-form,
+.schedule-list {
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.hunt-schedule-form { display: grid; gap: 0.75rem; }
+.schedule-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 0.65rem; }
+.schedule-list { display: grid; gap: 0.6rem; align-content: start; }
+.schedule-list > article { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.75rem; padding: 0.85rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2); }
+.schedule-list strong { display: block; margin-top: 0.45rem; font-size: 0.88rem; }
+.schedule-list p { margin: 0.2rem 0 0.55rem; color: var(--muted); font-size: 0.75rem; line-height: 1.45; }
+.schedule-list code { display: block; overflow: auto; padding: 0.5rem; border-radius: 5px; background: var(--bg); font-size: 0.68rem; }
+.schedule-list small { display: block; margin-top: 0.5rem; color: var(--faint); font-size: 0.66rem; }
+.schedule-actions { display: flex; flex-direction: column; gap: 0.4rem; }
+
+.world-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.65rem; margin-bottom: 0.85rem; }
+.world-metrics article { display: flex; gap: 0.75rem; align-items: flex-start; padding: 0.85rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+.world-metrics svg { color: var(--blue); margin-top: 0.15rem; }
+.world-metrics span,
+.world-metrics strong,
+.world-metrics small { display: block; }
+.world-metrics span { color: var(--muted); font-size: 0.68rem; font-weight: 700; }
+.world-metrics strong { margin-top: 0.2rem; font-size: 1.2rem; }
+.world-metrics small { margin-top: 0.15rem; color: var(--faint); font-size: 0.65rem; }
+.world-grid { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(19rem, 0.6fr); gap: 0.85rem; }
+.world-map { position: relative; min-height: 31rem; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; background: radial-gradient(circle at center, color-mix(in oklch, var(--blue) 12%, transparent), transparent 62%), var(--bg); }
+.world-map::before { content: ""; position: absolute; inset: 0; opacity: 0.35; background-image: linear-gradient(var(--border) 1px, transparent 1px), linear-gradient(90deg, var(--border) 1px, transparent 1px); background-size: 52px 52px; }
+.world-map svg { position: relative; display: block; width: 100%; min-height: 31rem; }
+.world-land path { fill: var(--surface-3); stroke: var(--border); stroke-width: 1.5; }
+.world-path path { fill: none; stroke-width: 2; stroke-linecap: round; stroke-dasharray: 7 7; opacity: 0.65; }
+.world-path circle { stroke: var(--surface); stroke-width: 2; }
+.world-path.radar path,
+.world-path.radar circle { stroke: var(--blue); fill: var(--blue); }
+.world-path.tenant path,
+.world-path.tenant circle { stroke: var(--red); fill: var(--red); }
+.world-empty { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 0.35rem; color: var(--muted); }
+.world-empty span { font-size: 0.75rem; }
+.world-legend { display: flex; gap: 1rem; margin-top: 0.65rem; color: var(--muted); font-size: 0.7rem; }
+.world-legend span { display: flex; align-items: center; gap: 0.35rem; }
+.world-legend i { width: 0.55rem; height: 0.55rem; border-radius: 999px; }
+.radar-dot { background: var(--blue); }
+.tawny-dot { background: var(--red); }
+.world-warning { margin: 0.65rem 0 0; padding: 0.55rem; border-radius: 5px; background: var(--orange-soft); color: var(--muted); font-size: 0.72rem; }
+.world-route-list { display: grid; }
+.world-route-list article { display: grid; grid-template-columns: auto 1fr; gap: 0.65rem; padding: 0.7rem 0; border-bottom: 1px solid var(--border); }
+.world-route-list article > span { color: var(--faint); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.68rem; }
+.world-route-list strong,
+.world-route-list small { display: block; }
+.world-route-list strong { font-size: 0.78rem; }
+.world-route-list strong b { color: var(--faint); font-weight: 500; }
+.world-route-list small { margin-top: 0.2rem; color: var(--muted); font-size: 0.66rem; }
+
+.hermes-integration { scroll-margin-top: 4rem; }
+.hermes-setup-grid { display: grid; grid-template-columns: 0.75fr 1.5fr 0.9fr; gap: 0.75rem; }
+.hermes-setup-grid > div { min-width: 0; padding: 0.9rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2); }
+.setup-number { color: var(--blue); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.68rem; font-weight: 800; }
+.hermes-setup-grid h3 { margin: 0.45rem 0 0.3rem; font-size: 0.9rem; }
+.hermes-setup-grid p { color: var(--muted); font-size: 0.76rem; line-height: 1.5; }
+.hermes-setup-grid pre { max-width: 100%; margin: 0; overflow: auto; padding: 0.75rem; border-radius: 6px; background: var(--bg); color: var(--text); font-size: 0.68rem; line-height: 1.5; }
+.hermes-proof { display: grid; grid-template-columns: auto 1fr; gap: 0.5rem; align-items: center; color: var(--muted); font-size: 0.72rem; }
+
 @media (max-width: 1100px) {
   .app-shell {
     grid-template-columns: 1fr;
@@ -2531,9 +2750,21 @@ td .inline-action,
   .config-grid,
   .scope-grid,
   .behavior-category-grid,
-  .intel-controls {
+  .intel-controls,
+  .war-room-hero,
+  .war-room-grid,
+  .hunt-schedule-layout,
+  .world-grid,
+  .hermes-setup-grid {
     grid-template-columns: 1fr;
   }
+
+  .agent-contract,
+  .world-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .run-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 
   .hunt-rail {
     position: static;
@@ -2564,6 +2795,16 @@ td .inline-action,
   .detail-grid {
     grid-template-columns: 1fr;
   }
+
+  .agent-contract,
+  .world-metrics,
+  .run-steps,
+  .schedule-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .schedule-list > article { grid-template-columns: 1fr; }
+  .schedule-actions { flex-direction: row; }
 
   .sidebar-header {
     padding: 0.7rem 0.75rem;

@@ -1,6 +1,6 @@
 export type AiProviderId = "azure-openai" | "aws-bedrock";
 
-export type AiAgentId = "triage" | "enrichment" | "case-writer";
+export type AiAgentId = "detect" | "triage" | "hunt" | "respond";
 
 export type AzureOpenAiConfig = {
   endpoint: string;

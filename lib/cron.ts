@@ -30,6 +30,14 @@ const jobDefinitions = [
       await syncEnabledThreatIntelFeeds();
     },
   },
+  {
+    name: "proactive-threat-hunt-sweep",
+    schedule: "* * * * *",
+    run: async () => {
+      const { runDueHuntSchedules } = await import("@/lib/war-room");
+      await runDueHuntSchedules();
+    },
+  },
 ];
 
 export function startCronJobs() {

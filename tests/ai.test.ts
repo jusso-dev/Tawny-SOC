@@ -83,7 +83,7 @@ describe("AI settings", () => {
     const settings = normalizeAiSettings({});
     expect(settings.enabled).toBe(false);
     expect(settings.provider).toBe("azure-openai");
-    expect(settings.agents).toEqual({ triage: true, enrichment: true, "case-writer": true });
+    expect(settings.agents).toEqual({ detect: true, triage: true, hunt: true, respond: true });
   });
 
   it("redacts secrets and reports configured state", () => {

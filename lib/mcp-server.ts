@@ -10,6 +10,7 @@ import {
   listTenantIndicators,
 } from "@/lib/agent-api";
 import { approveSoarAction, startSoarRun } from "@/lib/soar";
+import { createHuntSchedule, listAgentRuns, listHuntSchedules, runAgentMesh, runHuntSchedule } from "@/lib/war-room";
 
 export const MCP_PROTOCOL_VERSION = "2025-11-25";
 export const MCP_SUPPORTED_VERSIONS = ["2025-03-26", "2025-06-18", MCP_PROTOCOL_VERSION];
@@ -50,6 +51,50 @@ export const mcpTools: McpToolDefinition[] = [
     requiredScope: "alerts:read",
     inputSchema: objectSchema({ alertId: { type: "string" } }, ["alertId"]),
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  },
+  {
+    name: "tawny_run_agent_mesh",
+    title: "Run four-agent investigation",
+    description: "Run Tawny-SOC Detect, Triage, Hunt, and Respond against one tenant alert and persist the evidence ledger. Response output is a plan; containment is never executed here.",
+    requiredScope: "alerts:read",
+    inputSchema: objectSchema({ alertId: { type: "string" } }, ["alertId"]),
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+  },
+  {
+    name: "tawny_list_agent_runs",
+    title: "List agent investigation ledgers",
+    description: "Read recent four-agent investigation runs including step summaries, evidence, actions, engine mode, and timestamps.",
+    requiredScope: "alerts:read",
+    inputSchema: objectSchema({ limit: { type: "integer", minimum: 1, maximum: 50, default: 10 } }),
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  },
+  {
+    name: "tawny_list_hunt_schedules",
+    title: "List proactive threat hunts",
+    description: "List tenant-scoped YAAQL hunt schedules and last finding counts.",
+    requiredScope: "events:read",
+    inputSchema: objectSchema({}),
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  },
+  {
+    name: "tawny_run_hunt_schedule",
+    title: "Run a proactive hunt now",
+    description: "Execute one saved YAAQL threat-hunt schedule now and persist its findings in the agent ledger.",
+    requiredScope: "events:read",
+    inputSchema: objectSchema({ scheduleId: { type: "string" } }, ["scheduleId"]),
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+  },
+  {
+    name: "tawny_create_hunt_schedule",
+    title: "Create a proactive threat hunt",
+    description: "Create an autonomous YAAQL hunt schedule. Requires detection write scope.",
+    requiredScope: "detections:write",
+    inputSchema: objectSchema({
+      name: { type: "string" }, hypothesis: { type: "string" }, query: { type: "string" },
+      schedule: { type: "string", description: "Five-field cron expression." },
+      timezone: { type: "string", default: "UTC", description: "IANA timezone." },
+    }, ["name", "hypothesis", "query", "schedule"]),
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
   },
   {
     name: "tawny_list_cases",
@@ -137,8 +182,8 @@ export async function handleMcpMessage(message: unknown, principal: ApiPrincipal
     return rpcResult(request.id ?? null, {
       protocolVersion: MCP_SUPPORTED_VERSIONS.includes(requested) ? requested : MCP_PROTOCOL_VERSION,
       capabilities: { tools: { listChanged: false } },
-      serverInfo: { name: "tawny-soc", title: "Tawny-SOC Threat Hunting and SOAR", version: "0.1.0" },
-      instructions: "Use tawny_hunt for scoped evidence collection. Preview playbooks before execution. Never approve containment without explicit user authorization.",
+      serverInfo: { name: "tawny-soc", title: "Tawny-SOC AI War Room", version: "0.2.0" },
+      instructions: "Use tawny_run_agent_mesh for alert investigation and tawny_hunt for scoped evidence collection. Preview playbooks before execution. Never approve containment without explicit user authorization.",
     });
   }
   if (request.method === "tools/list") return rpcResult(request.id ?? null, { tools: listMcpTools(principal) });
@@ -174,6 +219,19 @@ async function invokeMcpTool(name: string, args: Record<string, unknown>, princi
     if (!alert) throw new Error("Alert not found.");
     return { alert };
   }
+  if (name === "tawny_run_agent_mesh") return { run: await runAgentMesh({ tenantId: principal.tenantId, alertId: requiredString(args.alertId, "alertId"), actorName: principal.name, trigger: "hermes-mcp" }) };
+  if (name === "tawny_list_agent_runs") return { runs: await listAgentRuns(principal.tenantId, optionalNumber(args.limit) ?? 10) };
+  if (name === "tawny_list_hunt_schedules") return { schedules: await listHuntSchedules(principal.tenantId) };
+  if (name === "tawny_run_hunt_schedule") return { run: await runHuntSchedule(principal.tenantId, requiredString(args.scheduleId, "scheduleId"), "hermes-mcp") };
+  if (name === "tawny_create_hunt_schedule") return { scheduleId: await createHuntSchedule({
+    tenantId: principal.tenantId,
+    name: requiredString(args.name, "name"),
+    hypothesis: requiredString(args.hypothesis, "hypothesis"),
+    query: requiredString(args.query, "query"),
+    schedule: requiredString(args.schedule, "schedule"),
+    timezone: optionalString(args.timezone) ?? "UTC",
+    actor: { id: principal.id, name: principal.name, tenantId: principal.tenantId, role: principal.role },
+  }) };
   if (name === "tawny_list_cases") return { cases: await listTenantCases(principal.tenantId, { status: optionalString(args.status), limit: optionalNumber(args.limit) }) };
   if (name === "tawny_get_case") {
     const incident = await getTenantCase(principal.tenantId, requiredString(args.incidentId, "incidentId"));

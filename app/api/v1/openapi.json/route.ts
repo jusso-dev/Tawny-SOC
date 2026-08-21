@@ -3,7 +3,7 @@ const document = {
   info: {
     title: "Tawny-SOC Agent API",
     version: "1.0.0",
-    description: "Tenant-scoped threat hunting, investigation context, threat intelligence, and approval-gated SOAR automation for coding agents.",
+    description: "Tenant-scoped agent investigations, scheduled threat hunting, investigation context, threat intelligence, and approval-gated SOAR automation for Hermes and other MCP clients.",
   },
   servers: [{ url: "/api/v1" }],
   security: [{ bearerAuth: [] }],

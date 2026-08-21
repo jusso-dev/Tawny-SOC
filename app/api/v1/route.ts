@@ -5,6 +5,6 @@ export async function GET() {
     authentication: "Bearer tawny_* API token",
     documentation: "/api/v1/openapi.json",
     mcp: "/api/mcp",
-    capabilities: ["YAAQL threat hunting", "alert detail", "case context", "threat intelligence", "SOAR planning and runs", "approval-gated response"],
+    capabilities: ["Detect/Triage/Hunt/Respond agent mesh", "replayable investigation ledger", "scheduled YAAQL threat hunting", "alert detail", "case context", "threat intelligence", "SOAR planning and runs", "approval-gated response"],
   });
 }

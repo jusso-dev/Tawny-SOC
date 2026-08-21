@@ -5,6 +5,8 @@ import {
   Braces,
   DatabaseZap,
   FolderKanban,
+  Globe2,
+  MessagesSquare,
   RadioTower,
   Search,
   Settings,
@@ -22,6 +24,7 @@ const navGroups = [
       { href: "/", label: "SOC Overview", icon: Activity },
       { href: "/alerts", label: "Alert Queue", icon: AlertTriangle },
       { href: "/incidents", label: "Incidents", icon: FolderKanban },
+      { href: "/war-room", label: "AI War Room", icon: MessagesSquare },
     ],
   },
   {
@@ -32,6 +35,7 @@ const navGroups = [
       { href: "/threat-intel", label: "Threat Intel", icon: RadioTower },
       { href: "/playbooks", label: "Playbooks", icon: Workflow },
       { href: "/hunt", label: "Search / Hunt", icon: Search },
+      { href: "/world", label: "World View", icon: Globe2 },
     ],
   },
   {

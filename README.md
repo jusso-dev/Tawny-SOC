@@ -4,7 +4,17 @@ AI-focused SOC/SIEM workspace for Tawny. It receives Tawny alerts and telemetry 
 
 ## Interface preview
 
-![Tawny-SOC sign-in screen](docs/screenshots/sign-in.png)
+### AI war room
+
+![Tawny-SOC AI war room with Detect, Triage, Hunt, and Respond agents](docs/screenshots/ai-war-room.png)
+
+### Global threat view
+
+![Tawny-SOC world view with geo-attributed threat paths](docs/screenshots/world-view.png)
+
+### SOC overview
+
+![Tawny-SOC overview with seeded alerts and active incident](docs/screenshots/soc-overview.png)
 
 ## Local Development
 
@@ -28,15 +38,17 @@ The local seed creates:
 - Local analyst: `analyst@tawny.local`
 - Local password: `TawnySocLocal123!`
 - Starter threat intel feed endpoints, including OpenPhish and PhishTank URL feeds
+- Representative geo-attributed alerts, an active P1 case, a four-agent investigation ledger, and proactive hunt schedules for the war room and world view
 
-`pnpm seed` is intended for local reset work. It keeps the local analyst and organization ready, seeds starter threat intel feed endpoints, and clears local SOC alerts, telemetry, cases, tasks, delivery logs, and timelines.
+`pnpm seed` is intended for local reset work. It keeps the local analyst and organization ready, resets local SOC data, and installs the representative investigation dataset above.
 
 ## SIEM Overview
 
 The SOC workspace includes:
 
 - SOC Overview: alert volume, incident volume, open cases, critical/high alerts, affected hosts, queue health, top rules, top MITRE tactics, top users, top processes, top external IPs, trends, and needs-attention items.
-- AI engine and agents: hot-swappable Azure OpenAI or AWS Bedrock model provider configured in the UI, with triage, threat intel enrichment, and case writing agents surfaced on alert and case detail pages, deterministic fallbacks when AI is off, and audit-logged agent runs.
+- AI war room: four named agents — Detect, Triage, Hunt, and Respond — run a complete alert investigation, persist each step in a replayable evidence ledger, and expose engine mode, confidence, evidence, actions, and timestamps. High/critical ingested alerts enter the mesh automatically unless `TAWNY_AGENT_AUTORUN=false`; `TAWNY_AGENT_AUTORUN_MAX_PER_BATCH` limits model fan-out (default `5`).
+- AI engine: hot-swappable Azure OpenAI or AWS Bedrock provider configured in the UI, deterministic fallbacks when AI is off, untrusted-telemetry prompt guardrails, and audit-logged runs.
 - Scalable ingestion: Tawny HTTP ingest, generic JSON, syslog/CEF, Windows Event/Sysmon, AWS CloudTrail, Azure sign-in/activity, Microsoft 365 audit, firewall/network logs, parser normalization, dead-letter tracking, and source health.
 - Connector catalog: cloud, identity, SaaS, network, endpoint, and generic connectors with required fields, credential references, safe local test actions, status, schedule, and redaction.
 - Alert Queue: severity, confidence, status, rule, source, host, user, process, MITRE, TI hits, assignee, filters, and bulk action controls.
@@ -48,7 +60,8 @@ The SOC workspace includes:
 - Threat Intelligence: feed management and searchable, sortable, filterable, paginated IOC browser for STIX, OpenIOC, CSV, TXT, MISP, OTX, URLhaus, and custom URL feeds.
 - Playbooks: ordered SOC workflows for malware, suspicious PowerShell, new admin user, suspicious outbound IP, credential theft, host isolation, and suspicious URL style investigations.
 - SOAR automation: persisted playbook runs, deterministic action classification, automatic YAAQL investigation steps, analyst task handoff, dry-run planning, response approvals, and audited execution history.
-- Search / Hunt: YAAQL-powered enterprise hunt workspace for event type, host, user, process, hash, IP, domain, time, and payload-path queries, with examples, field pivots, saved searches, and clickable saved-search loading.
+- Search / Hunt: YAAQL-powered enterprise hunt workspace plus persisted proactive schedules. A minute sweep runs due hypotheses, records finding counts, and writes results into the agent ledger.
+- Global threat view: Cloudflare Radar Layer 7 attack origin/target pairs overlaid with geo-attributed tenant alerts. Global percentage context is labelled separately from tenant evidence.
 - Integrations: email, Slack, webhook, Microsoft Sentinel, Google Security Operations, Wazuh, Kelpie, connector health, endpoint/token/credential configuration, delivery tests, and delivery state.
 - SOC Settings: split settings subpages for severity mapping, notification routing, suppression, threat intel TTL, case numbering, SLAs, role permissions, team access, API tokens, retention, compliance reports, and audit logs.
 - Access and authentication: BetterAuth sign-in/sign-up, team member administration under Settings, tenant invitations, magic-link invite flow, and MFA posture display.
@@ -94,7 +107,20 @@ For bearer-token protection, create a tenant API token in `Settings -> API token
 
 `GET /api/events` accepts a session cookie or a bearer token with `events:read`. `GET /api/alerts` accepts a session cookie or a bearer token with `alerts:read`.
 
-## Agent API and MCP
+## AI War Room
+
+`/war-room` is the operational surface for the four-agent pipeline:
+
+1. **Detect** fuses related endpoint, identity, cloud, and network signals into an attack chain.
+2. **Triage** assigns verdict, urgency, confidence, rationale, and the recommended playbook.
+3. **Hunt** enriches indicators and produces valid YAAQL pivots for retained evidence.
+4. **Respond** prepares immediate investigation steps, approval-gated containment, and verification checks.
+
+Every run is stored in `soc_agent_run`. Agent telemetry and feed values are treated as untrusted data in every model prompt. When the configured AI provider is unavailable, the same pipeline completes with deterministic, explicitly labelled fallback logic.
+
+Proactive hunts are stored in `soc_hunt_schedule`. Create, pause, resume, or run them from the war room. Schedules use five-field cron expressions with an explicit IANA timezone.
+
+## Agent API, MCP, and Hermes
 
 Coding agents can hunt and investigate through a tenant-scoped REST API or the Streamable HTTP MCP endpoint. Create a dedicated API token under `Settings -> API tokens`; give read-only agents only `events:read`, `alerts:read`, `cases:read`, `threat-intel:read`, and `playbooks:read`.
 
@@ -118,10 +144,36 @@ curl -X POST -H "Authorization: Bearer $TAWNY_SOC_TOKEN" -H "Content-Type: appli
   "http://localhost:3001/api/v1/playbooks/incident-response/runs"
 ```
 
-The MCP server exposes the following tools. Tool discovery is filtered to the scopes on the presented token:
+The MCP server is a native Hermes integration. Hermes supports remote HTTP MCP servers, so Tawny-SOC supplies the SOC tools and evidence while Hermes supplies the conversational bot surface. No coding-agent harness is required between them.
+
+Add this to `~/.hermes/config.yaml` and put `TAWNY_SOC_TOKEN=...` in `~/.hermes/.env`:
+
+```yaml
+mcp_servers:
+  tawny_soc:
+    url: "http://192.168.1.19:3014/api/mcp"
+    headers:
+      Authorization: "Bearer ${TAWNY_SOC_TOKEN}"
+    tools:
+      include:
+        - tawny_run_agent_mesh
+        - tawny_list_agent_runs
+        - tawny_hunt
+        - tawny_list_hunt_schedules
+        - tawny_run_hunt_schedule
+```
+
+Run `/reload-mcp` in Hermes, then ask it to list Tawny-SOC agent runs. Use a member token for investigation. An admin token with `detections:write` is required for `tawny_create_hunt_schedule`.
+
+Tool discovery is filtered to the scopes on the presented token:
 
 - `tawny_hunt`: run tenant-scoped YAAQL searches across alerts and telemetry.
 - `tawny_get_alert`: pull alert payload, detection, confidence, and ATT&CK context.
+- `tawny_run_agent_mesh`: run Detect, Triage, Hunt, and Respond and persist the investigation ledger.
+- `tawny_list_agent_runs`: replay agent steps, evidence, actions, engine mode, and timestamps.
+- `tawny_list_hunt_schedules`: inspect proactive hunt cadence and last finding counts.
+- `tawny_run_hunt_schedule`: run one saved hunt immediately and persist its findings.
+- `tawny_create_hunt_schedule`: create a cron-backed YAAQL hypothesis with `detections:write`.
 - `tawny_list_cases` and `tawny_get_case`: inspect cases, tasks, comments, observables, and timelines.
 - `tawny_search_threat_intel`: search active tenant indicators.
 - `tawny_list_playbooks`: inspect phases, actions, and automation characteristics.
@@ -145,6 +197,10 @@ A typical MCP client entry is:
 ```
 
 Client configuration keys vary by MCP host. Remote deployments should use HTTPS and set `MCP_ALLOWED_ORIGINS` to a comma-separated allowlist if browser-based MCP clients connect from other origins.
+
+## Cloudflare Radar World View
+
+Set `CLOUDFLARE_RADAR_API_TOKEN` to a Cloudflare API token with **Account > Radar > Read** permission. `/world` requests the top Layer 7 origin/target attack pairs for the last day, caches them for 15 minutes, and shows Radar `lastUpdated` metadata. If Radar is unavailable, tenant geo signals remain visible and the page reports degraded or unconfigured state instead of presenting fallback data as live Cloudflare data.
 
 SOAR safety defaults:
 

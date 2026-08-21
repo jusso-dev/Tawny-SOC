@@ -31,7 +31,12 @@ describe("MCP server", () => {
     const names = listMcpTools(principal).map((tool) => tool.name);
     expect(names).toContain("tawny_hunt");
     expect(names).toContain("tawny_get_alert");
+    expect(names).toContain("tawny_run_agent_mesh");
+    expect(names).toContain("tawny_list_agent_runs");
+    expect(names).toContain("tawny_list_hunt_schedules");
+    expect(names).toContain("tawny_run_hunt_schedule");
     expect(names).toContain("tawny_run_playbook");
+    expect(names).not.toContain("tawny_create_hunt_schedule");
     expect(names).not.toContain("tawny_get_case");
     expect(names).not.toContain("tawny_approve_response");
   });

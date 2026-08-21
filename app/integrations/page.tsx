@@ -1,3 +1,5 @@
+import { Bot, Cable, ShieldCheck } from "lucide-react";
+import Link from "next/link";
 import { IngestionConfigForms } from "@/components/ingestion-config-forms";
 import { IntegrationConfigForm } from "@/components/integration-config-form";
 import { PageHeader, SocShell } from "@/components/soc-shell";
@@ -14,6 +16,38 @@ export default async function IntegrationsPage() {
       />
 
       <IntegrationConfigForm kelpieConfig={kelpieConfig} channels={integrationChannels} />
+
+      <section className="panel hermes-integration" id="hermes">
+        <div className="panel-heading">
+          <div><p className="eyebrow">Hermes Agent</p><h2>Give every Hermes bot a native Tawny-SOC toolset.</h2><p>Hermes supports remote HTTP MCP directly. No Claude Code, Codex, or other AI harness sits between the bot and this SOC.</p></div>
+          <Bot size={20} aria-hidden />
+        </div>
+        <div className="hermes-setup-grid">
+          <div>
+            <span className="setup-number">01</span><h3>Create scoped token</h3><p>Use a member token for investigation. Use admin only when Hermes must create hunt schedules.</p>
+            <Link className="text-button" href="/settings/api-tokens">Open API tokens</Link>
+          </div>
+          <div>
+            <span className="setup-number">02</span><h3>Add remote MCP</h3>
+            <pre><code>{`mcp_servers:
+  tawny_soc:
+    url: "http://192.168.1.19:3014/api/mcp"
+    headers:
+      Authorization: "Bearer \${TAWNY_SOC_TOKEN}"
+    tools:
+      include:
+        - tawny_run_agent_mesh
+        - tawny_list_agent_runs
+        - tawny_hunt
+        - tawny_list_hunt_schedules
+        - tawny_run_hunt_schedule`}</code></pre>
+          </div>
+          <div>
+            <span className="setup-number">03</span><h3>Reload and prove</h3><p>Put token in <code>~/.hermes/.env</code>, run <code>/reload-mcp</code>, then ask Hermes to list Tawny-SOC investigation ledgers.</p>
+            <div className="hermes-proof"><Cable size={15} aria-hidden /><span>Streamable HTTP</span><ShieldCheck size={15} aria-hidden /><span>Scope filtered</span></div>
+          </div>
+        </div>
+      </section>
 
       <section className="panel">
         <div className="panel-heading">

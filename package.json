@@ -9,6 +9,7 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:e2e": "tsx scripts/smoke-war-room.ts",
     "screenshot": "tsx scripts/capture-readme-screenshot.ts",
     "seed": "node scripts/seed-local.mjs",
     "db:generate": "drizzle-kit generate",

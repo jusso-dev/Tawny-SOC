@@ -387,3 +387,40 @@ export const socAuditLog = pgTable("soc_audit_log", {
 }, (table) => [
   index("soc_audit_log_tenant_created_idx").on(table.tenantId, table.createdAt),
 ]);
+
+export const socAgentRun = pgTable("soc_agent_run", {
+  id: text("id").primaryKey(),
+  tenantId: text("tenant_id").notNull(),
+  alertId: text("alert_id").references(() => socAlert.id, { onDelete: "set null" }),
+  trigger: text("trigger").notNull().default("manual"),
+  status: text("status").notNull().default("running"),
+  title: text("title").notNull(),
+  summary: text("summary").notNull().default(""),
+  steps: jsonb("steps").$type<Array<Record<string, unknown>>>().notNull().default([]),
+  findings: jsonb("findings").$type<Array<Record<string, unknown>>>().notNull().default([]),
+  initiatedBy: text("initiated_by").notNull(),
+  startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+}, (table) => [
+  index("soc_agent_run_tenant_started_idx").on(table.tenantId, table.startedAt),
+  index("soc_agent_run_alert_idx").on(table.alertId),
+]);
+
+export const socHuntSchedule = pgTable("soc_hunt_schedule", {
+  id: text("id").primaryKey(),
+  tenantId: text("tenant_id").notNull(),
+  name: text("name").notNull(),
+  hypothesis: text("hypothesis").notNull(),
+  query: text("query").notNull(),
+  schedule: text("schedule").notNull(),
+  timezone: text("timezone").notNull().default("UTC"),
+  enabled: boolean("enabled").notNull().default(true),
+  lastRunAt: timestamp("last_run_at", { withTimezone: true }),
+  lastStatus: text("last_status").notNull().default("never_run"),
+  lastFindingCount: integer("last_finding_count").notNull().default(0),
+  createdBy: text("created_by").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
+}, (table) => [
+  index("soc_hunt_schedule_tenant_enabled_idx").on(table.tenantId, table.enabled),
+]);

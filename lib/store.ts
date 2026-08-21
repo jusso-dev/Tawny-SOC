@@ -1802,6 +1802,9 @@ export async function ingestTawny(payload: IngestPayload) {
   return {
     accepted: nextEvents.length + nextAlerts.length,
     alerts: nextAlerts.length,
+    alertIds: nextAlerts.map((alert) => alert.id),
+    priorityAlertIds: nextAlerts.filter((alert) => alert.severity === "critical" || alert.severity === "high").map((alert) => alert.id),
+    tenantId: cleanText(agent.tenant_id ?? payload.tenant_id, ""),
     events: nextEvents.length,
     googleSecOps: forwarding,
   };
