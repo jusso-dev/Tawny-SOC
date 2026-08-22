@@ -64,6 +64,20 @@
       "when": 1787270400000,
       "tag": "0008_add_agent_war_room",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1787320800000,
+      "tag": "0009_add_agent_workflow_identity",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1787385600000,
+      "tag": "0010_add_agent_room_trace",
+      "breakpoints": true
     }
   ]
 }

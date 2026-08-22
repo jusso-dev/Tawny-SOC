@@ -1,16 +1,12 @@
 import { getSocSettingRecord, recordAuditLog, saveSocSetting, type SocActor } from "@/lib/store";
 import type { AiAgentId, AiProviderId, AiSettings, AiSettingsInput, AiSettingsView } from "@/lib/ai/types";
+import { socAgentIds, socAgentProfiles } from "@/lib/ai/agents/catalog";
 
 export const AI_SETTING_KEY = "ai";
 
-export const aiAgentIds: AiAgentId[] = ["detect", "triage", "hunt", "respond"];
+export const aiAgentIds: AiAgentId[] = [...socAgentIds];
 
-export const aiAgentLabels: Record<AiAgentId, string> = {
-  detect: "Detect agent",
-  triage: "Triage agent",
-  hunt: "Hunt agent",
-  respond: "Respond agent",
-};
+export const aiAgentLabels = Object.fromEntries(socAgentProfiles.map((agent) => [agent.id, agent.name])) as Record<AiAgentId, string>;
 
 export const aiSettingsDefaults: AiSettings = {
   enabled: false,
@@ -28,7 +24,7 @@ export const aiSettingsDefaults: AiSettings = {
     secretAccessKey: "",
     sessionToken: "",
   },
-  agents: { detect: true, triage: true, hunt: true, respond: true },
+  agents: Object.fromEntries(socAgentIds.map((id) => [id, true])) as Record<AiAgentId, boolean>,
 };
 
 export function parseAiProviderId(value: unknown): AiProviderId {
@@ -63,12 +59,7 @@ export function normalizeAiSettings(raw: Record<string, unknown>): AiSettings {
       secretAccessKey: str(bedrock.secretAccessKey),
       sessionToken: str(bedrock.sessionToken),
     },
-    agents: {
-      detect: agents.detect !== false,
-      triage: agents.triage !== false,
-      hunt: agents.hunt !== false && agents.enrichment !== false,
-      respond: agents.respond !== false && agents["case-writer"] !== false,
-    },
+    agents: normalizeAgentToggles(agents),
   };
 }
 
@@ -109,13 +100,19 @@ export function mergeAiSettings(existing: AiSettings, input: AiSettingsInput): A
       secretAccessKey: str(input.bedrock.secretAccessKey) || existing.bedrock.secretAccessKey,
       sessionToken: str(input.bedrock.sessionToken) || existing.bedrock.sessionToken,
     },
-    agents: {
-      detect: input.agents.detect !== false,
-      triage: input.agents.triage !== false,
-      hunt: input.agents.hunt !== false,
-      respond: input.agents.respond !== false,
-    },
+    agents: Object.fromEntries(socAgentIds.map((id) => [id, input.agents[id] !== false])) as Record<AiAgentId, boolean>,
   };
+}
+
+function normalizeAgentToggles(agents: Record<string, unknown>): Record<AiAgentId, boolean> {
+  const legacy: Partial<Record<AiAgentId, boolean>> = {
+    correlator: agents.detect !== false,
+    threat_hunter: agents.hunt !== false && agents.enrichment !== false,
+    threat_intel: agents.hunt !== false && agents.enrichment !== false,
+    responder: agents.respond !== false,
+    reporter: agents["case-writer"] !== false,
+  };
+  return Object.fromEntries(socAgentIds.map((id) => [id, agents[id] === undefined ? legacy[id] !== false : agents[id] !== false])) as Record<AiAgentId, boolean>;
 }
 
 export async function saveAiSettings(tenantId: string, input: AiSettingsInput, actor?: SocActor): Promise<AiSettings> {

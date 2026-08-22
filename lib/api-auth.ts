@@ -22,7 +22,7 @@ export async function authenticateApiRequest(
     if (!token) return null;
     return {
       id: token.id,
-      name: `API token ${token.id}`,
+      name: token.name,
       tenantId: token.tenantId,
       role: token.role,
       scopes: token.scopes,

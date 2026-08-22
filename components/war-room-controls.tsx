@@ -4,27 +4,32 @@ import { Bot, CalendarPlus, Pause, Play, Radar, RotateCcw } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { notify } from "@/components/toast-provider";
+import type { AgentWorkflow } from "@/lib/agent-workflows";
 import type { HuntSchedule } from "@/lib/war-room";
 
 type AlertOption = { id: string; title: string; severity: string; hostname?: string };
 
-export function AgentMeshLauncher({ alerts }: { alerts: AlertOption[] }) {
+export function AgentMeshLauncher({ alerts, workflows }: { alerts: AlertOption[]; workflows: AgentWorkflow[] }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [alertId, setAlertId] = useState(alerts[0]?.id ?? "");
+  const [workflowId, setWorkflowId] = useState(workflows[0]?.id ?? "");
 
   return <form className="mesh-launcher" onSubmit={(event) => {
     event.preventDefault();
     startTransition(async () => {
-      const result = await post({ action: "run-agent-mesh", alertId });
+      const result = await post({ action: "run-agent-workflow", alertId, workflowId });
       notify(result.message, result.ok ? "success" : "error");
       if (result.ok) router.refresh();
     });
   }}>
+    <label><span>Specialist workflow</span><select value={workflowId} onChange={(event) => setWorkflowId(event.target.value)} disabled={!workflows.length}>
+      {workflows.map((workflow) => <option key={workflow.id} value={workflow.id}>{workflow.name} · {workflow.phases.length} agents</option>)}
+    </select></label>
     <label><span>Focus alert</span><select value={alertId} onChange={(event) => setAlertId(event.target.value)} disabled={!alerts.length}>
       {alerts.map((alert) => <option key={alert.id} value={alert.id}>{alert.severity.toUpperCase()} · {alert.title} · {alert.hostname ?? "unknown host"}</option>)}
     </select></label>
-    <button className="primary-action" type="submit" disabled={pending || !alertId}><Bot size={15} aria-hidden /> {pending ? "Agents working..." : "Run agent mesh"}</button>
+    <button className="primary-action" type="submit" disabled={pending || !alertId || !workflowId}><Bot size={15} aria-hidden /> {pending ? "Specialists working..." : "Run workflow"}</button>
   </form>;
 }
 

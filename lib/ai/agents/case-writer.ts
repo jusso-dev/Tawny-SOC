@@ -85,7 +85,7 @@ export function deterministicCaseDraft(input: CaseWriterInput, note?: string): C
 }
 
 export async function runCaseWriterAgent(tenantId: string, input: CaseWriterInput): Promise<CaseDraftResult> {
-  const run = await runAgentJson(tenantId, "respond", buildCaseWriterPrompt(input), 2200);
+  const run = await runAgentJson(tenantId, "reporter", buildCaseWriterPrompt(input), 2200);
   if (!run) return deterministicCaseDraft(input, "AI engine unavailable; deterministic draft applied.");
 
   const fallback = deterministicCaseDraft(input);

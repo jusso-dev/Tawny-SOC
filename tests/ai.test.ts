@@ -7,6 +7,7 @@ import { buildTriagePrompt, deterministicTriage, runTriageAgent } from "../lib/a
 import { createAzureOpenAiProvider } from "../lib/ai/providers/azure-openai";
 import { createBedrockProvider, rfc3986Encode, signAwsRequest } from "../lib/ai/providers/bedrock";
 import { aiSettingsDefaults, mergeAiSettings, normalizeAiSettings, redactAiSettings } from "../lib/ai/settings";
+import { socAgentIds } from "../lib/ai/agents/catalog";
 import type { AiSettings } from "../lib/ai/types";
 import type { Playbook, SocAlert, ThreatIntelMatch } from "../lib/types";
 
@@ -83,7 +84,19 @@ describe("AI settings", () => {
     const settings = normalizeAiSettings({});
     expect(settings.enabled).toBe(false);
     expect(settings.provider).toBe("azure-openai");
-    expect(settings.agents).toEqual({ detect: true, triage: true, hunt: true, respond: true });
+    expect(Object.keys(settings.agents)).toEqual(socAgentIds);
+    expect(Object.values(settings.agents).every(Boolean)).toBe(true);
+  });
+
+  it("maps legacy four-agent settings onto specialist profiles", () => {
+    const settings = normalizeAiSettings({ agents: { detect: false, triage: true, hunt: false, respond: false, "case-writer": false } });
+    expect(settings.agents.triage).toBe(true);
+    expect(settings.agents.correlator).toBe(false);
+    expect(settings.agents.threat_hunter).toBe(false);
+    expect(settings.agents.threat_intel).toBe(false);
+    expect(settings.agents.responder).toBe(false);
+    expect(settings.agents.reporter).toBe(false);
+    expect(settings.agents.investigator).toBe(true);
   });
 
   it("redacts secrets and reports configured state", () => {

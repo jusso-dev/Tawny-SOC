@@ -1,6 +1,7 @@
 export type AiProviderId = "azure-openai" | "aws-bedrock";
 
-export type AiAgentId = "detect" | "triage" | "hunt" | "respond";
+export type { SocAgentId as AiAgentId } from "@/lib/ai/agents/catalog";
+import type { SocAgentId } from "@/lib/ai/agents/catalog";
 
 export type AzureOpenAiConfig = {
   endpoint: string;
@@ -22,7 +23,7 @@ export type AiSettings = {
   provider: AiProviderId;
   azure: AzureOpenAiConfig;
   bedrock: BedrockConfig;
-  agents: Record<AiAgentId, boolean>;
+  agents: Record<SocAgentId, boolean>;
 };
 
 export type AiSettingsView = Omit<AiSettings, "azure" | "bedrock"> & {
@@ -35,7 +36,7 @@ export type AiSettingsInput = {
   provider: AiProviderId;
   azure: Partial<AzureOpenAiConfig>;
   bedrock: Partial<BedrockConfig>;
-  agents: Partial<Record<AiAgentId, boolean>>;
+  agents: Partial<Record<SocAgentId, boolean>>;
 };
 
 export type AiChatMessage = {

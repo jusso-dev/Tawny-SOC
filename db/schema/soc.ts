@@ -1,4 +1,4 @@
-import { boolean, index, integer, jsonb, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import { boolean, index, integer, jsonb, pgTable, serial, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 import type { IncidentStatus, KelpieSyncStatus, Severity } from "@/lib/types";
 
 export const socEvent = pgTable("soc_event", {
@@ -392,6 +392,7 @@ export const socAgentRun = pgTable("soc_agent_run", {
   id: text("id").primaryKey(),
   tenantId: text("tenant_id").notNull(),
   alertId: text("alert_id").references(() => socAlert.id, { onDelete: "set null" }),
+  workflowId: text("workflow_id"),
   trigger: text("trigger").notNull().default("manual"),
   status: text("status").notNull().default("running"),
   title: text("title").notNull(),
@@ -403,7 +404,29 @@ export const socAgentRun = pgTable("soc_agent_run", {
   completedAt: timestamp("completed_at", { withTimezone: true }),
 }, (table) => [
   index("soc_agent_run_tenant_started_idx").on(table.tenantId, table.startedAt),
+  index("soc_agent_run_tenant_workflow_started_idx").on(table.tenantId, table.workflowId, table.startedAt),
   index("soc_agent_run_alert_idx").on(table.alertId),
+]);
+
+export const socAgentRoomEvent = pgTable("soc_agent_room_event", {
+  id: text("id").primaryKey(),
+  sequence: serial("sequence").notNull(),
+  tenantId: text("tenant_id").notNull(),
+  runId: text("run_id").notNull().references(() => socAgentRun.id, { onDelete: "cascade" }),
+  eventType: text("event_type").notNull(),
+  status: text("status").notNull(),
+  actorId: text("actor_id"),
+  actorName: text("actor_name").notNull(),
+  agentId: text("agent_id"),
+  targetAgentId: text("target_agent_id"),
+  phaseId: text("phase_id"),
+  toolName: text("tool_name"),
+  summary: text("summary").notNull(),
+  detail: jsonb("detail").$type<Record<string, unknown>>().notNull().default({}),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+}, (table) => [
+  index("soc_agent_room_event_tenant_run_sequence_idx").on(table.tenantId, table.runId, table.sequence),
+  index("soc_agent_room_event_run_type_idx").on(table.runId, table.eventType),
 ]);
 
 export const socHuntSchedule = pgTable("soc_hunt_schedule", {

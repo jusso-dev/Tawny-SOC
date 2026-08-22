@@ -950,7 +950,7 @@ export async function validateApiToken(secret: string, requiredScope?: ApiTokenS
   const scopes = normalizeApiTokenScopes(row.scopes, role);
   if (requiredScope && !scopes.includes(requiredScope)) return null;
   await db.update(schema.socApiToken).set({ lastUsedAt: new Date(), updatedAt: new Date() }).where(eq(schema.socApiToken.id, row.id));
-  return { id: row.id, tenantId: row.tenantId, role, scopes };
+  return { id: row.id, name: row.name, tenantId: row.tenantId, role, scopes };
 }
 
 export async function listThreatIntelFeeds(tenantId: string) {

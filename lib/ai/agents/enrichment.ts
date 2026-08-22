@@ -94,7 +94,7 @@ export function deterministicEnrichment(input: EnrichmentAgentInput, note?: stri
 }
 
 export async function runEnrichmentAgent(tenantId: string, input: EnrichmentAgentInput): Promise<EnrichmentAgentResult> {
-  const run = await runAgentJson(tenantId, "hunt", buildEnrichmentPrompt(input));
+  const run = await runAgentJson(tenantId, "threat_intel", buildEnrichmentPrompt(input));
   if (!run) return deterministicEnrichment(input, "AI engine unavailable; deterministic enrichment applied.");
 
   const fallback = deterministicEnrichment(input);

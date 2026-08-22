@@ -9,6 +9,13 @@ import { getSession } from "@/lib/session";
 import { listSigmaRules } from "@/lib/sigma";
 import { extractAlertContext } from "@/lib/soc-domain";
 import { listAlerts, listIncidents, listThreatIntelMatches } from "@/lib/store";
+import { listAgentWorkflows, listSocAgents } from "@/lib/war-room";
+
+export async function GET() {
+  const session = await getSession();
+  if (!session) return NextResponse.json({ error: "Sign in required." }, { status: 401 });
+  return NextResponse.json({ agents: listSocAgents(), workflows: listAgentWorkflows() });
+}
 
 export async function POST(request: Request) {
   const session = await getSession();

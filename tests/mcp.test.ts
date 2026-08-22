@@ -7,7 +7,7 @@ const principal: ApiPrincipal = {
   name: "API token token-1",
   tenantId: "tenant-a",
   role: "member",
-  scopes: ["events:read", "alerts:read", "playbooks:read"],
+  scopes: ["events:read", "alerts:read", "playbooks:read", "agent-rooms:read", "agent-rooms:write"],
   authType: "bearer",
 };
 
@@ -31,6 +31,13 @@ describe("MCP server", () => {
     const names = listMcpTools(principal).map((tool) => tool.name);
     expect(names).toContain("tawny_hunt");
     expect(names).toContain("tawny_get_alert");
+    expect(names).toContain("tawny_list_soc_agents");
+    expect(names).toContain("tawny_list_agent_workflows");
+    expect(names).toContain("tawny_open_agent_room");
+    expect(names).toContain("tawny_get_agent_room");
+    expect(names).toContain("tawny_post_agent_message");
+    expect(names).toContain("tawny_close_agent_room");
+    expect(names).toContain("tawny_run_agent_workflow");
     expect(names).toContain("tawny_run_agent_mesh");
     expect(names).toContain("tawny_list_agent_runs");
     expect(names).toContain("tawny_list_hunt_schedules");
@@ -39,6 +46,14 @@ describe("MCP server", () => {
     expect(names).not.toContain("tawny_create_hunt_schedule");
     expect(names).not.toContain("tawny_get_case");
     expect(names).not.toContain("tawny_approve_response");
+  });
+
+  it("adds optional room attribution to every Tawny tool schema", () => {
+    const tools = listMcpTools(principal);
+    expect(tools.every((tool) => {
+      const properties = tool.inputSchema.properties as Record<string, unknown> | undefined;
+      return Boolean(properties?.roomId && properties.agentId);
+    })).toBe(true);
   });
 
   it("returns a protocol authorization error when a hidden tool is called", async () => {

@@ -4,6 +4,7 @@ import { PlugZap, Save } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { notify } from "@/components/toast-provider";
+import { socAgentProfiles } from "@/lib/ai/agents/catalog";
 import type { AiProviderId, AiSettingsView } from "@/lib/ai/types";
 
 export function AiSettingsForm({ settings }: { settings: AiSettingsView }) {
@@ -32,10 +33,7 @@ export function AiSettingsForm({ settings }: { settings: AiSettingsView }) {
           bedrockAccessKeyId: formData.get("bedrockAccessKeyId"),
           bedrockSecretAccessKey: formData.get("bedrockSecretAccessKey"),
           bedrockSessionToken: formData.get("bedrockSessionToken"),
-          agentDetect: formData.get("agentDetect") === "on",
-          agentTriage: formData.get("agentTriage") === "on",
-          agentHunt: formData.get("agentHunt") === "on",
-          agentRespond: formData.get("agentRespond") === "on",
+          agents: Object.fromEntries(socAgentProfiles.map((agent) => [agent.id, formData.get(`agent_${agent.id}`) === "on"])),
         }),
       });
       const body = await res.json().catch(() => ({})) as { message?: string; error?: string };
@@ -123,23 +121,11 @@ export function AiSettingsForm({ settings }: { settings: AiSettingsView }) {
           <p>Toggle which SOC agents run through the AI engine. Disabled agents fall back to deterministic logic.</p>
         </div>
       </div>
-      <div className="config-grid">
-        <label className="checkbox-field">
-          <input name="agentDetect" type="checkbox" defaultChecked={settings.agents.detect} />
-          <span>Detect agent — fuse related signals and map attack chains</span>
-        </label>
-        <label className="checkbox-field">
-          <input name="agentTriage" type="checkbox" defaultChecked={settings.agents.triage} />
-          <span>Triage agent — verdict, confidence, and next actions per alert</span>
-        </label>
-        <label className="checkbox-field">
-          <input name="agentHunt" type="checkbox" defaultChecked={settings.agents.hunt} />
-          <span>TI enrichment agent — indicator assessment and hunt pivots</span>
-        </label>
-        <label className="checkbox-field">
-          <input name="agentRespond" type="checkbox" defaultChecked={settings.agents.respond} />
-          <span>Respond agent — plan containment and draft case reporting</span>
-        </label>
+      <div className="config-grid agent-toggle-grid">
+        {socAgentProfiles.map((agent) => <label className="checkbox-field" key={agent.id}>
+          <input name={`agent_${agent.id}`} type="checkbox" defaultChecked={settings.agents[agent.id]} />
+          <span>{agent.name} — {agent.description}</span>
+        </label>)}
       </div>
 
       <div className="config-actions">

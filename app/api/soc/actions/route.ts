@@ -43,7 +43,7 @@ import {
   type SocActor,
 } from "@/lib/store";
 import { startSoarRun } from "@/lib/soar";
-import { saveAiSettings, testAiConnection, type AiSettingsInput } from "@/lib/ai";
+import { aiAgentIds, saveAiSettings, testAiConnection, type AiSettingsInput } from "@/lib/ai";
 import { parseAiProviderId } from "@/lib/ai/settings";
 import { disableSigmaRule, duplicateSigmaRule, importSigmaRule } from "@/lib/sigma";
 import { promoteAlertToKelpie, promoteIncidentToKelpie, recordDeliveryState } from "@/lib/soc-workflows";
@@ -460,6 +460,14 @@ async function addExistingUser(body: Record<string, unknown>, actor: SocActor) {
 }
 
 function parseAiSettingsInput(body: Record<string, unknown>): AiSettingsInput {
+  const submittedAgents = isRecord(body.agents) ? body.agents : {
+    triage: body.agentTriage !== false,
+    correlator: body.agentDetect !== false,
+    threat_hunter: body.agentHunt !== false,
+    threat_intel: body.agentHunt !== false,
+    responder: body.agentRespond !== false,
+    reporter: body.agentRespond !== false,
+  };
   return {
     enabled: Boolean(body.enabled),
     provider: parseAiProviderId(body.provider),
@@ -476,12 +484,7 @@ function parseAiSettingsInput(body: Record<string, unknown>): AiSettingsInput {
       secretAccessKey: optionalString(body.bedrockSecretAccessKey),
       sessionToken: optionalString(body.bedrockSessionToken),
     },
-    agents: {
-      detect: body.agentDetect !== false,
-      triage: body.agentTriage !== false,
-      hunt: body.agentHunt !== false,
-      respond: body.agentRespond !== false,
-    },
+    agents: Object.fromEntries(aiAgentIds.map((id) => [id, submittedAgents[id] !== false])),
   };
 }
 

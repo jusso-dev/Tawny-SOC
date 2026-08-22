@@ -19,6 +19,7 @@ services:
       retries: 10
 
   app:
+    image: tawny-soc-app:homelab
     build:
       context: .
       dockerfile: Dockerfile
@@ -41,7 +42,63 @@ services:
       NODE_ENV: production
     ports:
       - "3014:3001"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001/sign-in').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 30s
     command: sh -c "pnpm db:migrate && pnpm start"
+
+  hermes-bootstrap:
+    image: tawny-soc-app:homelab
+    restart: "no"
+    depends_on:
+      db:
+        condition: service_healthy
+      app:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgres://tawny_soc:${POSTGRES_PASSWORD:-tawny_soc}@db:5432/tawny_soc
+      TAWNY_HERMES_DATA_DIR: /opt/hermes-data
+      TAWNY_HERMES_TENANT_ID: ${TAWNY_HERMES_TENANT_ID:-local-tenant}
+      TAWNY_SOC_MCP_URL: http://app:3001/api/mcp
+      TAWNY_HERMES_UID: "10000"
+      TAWNY_HERMES_GID: "10000"
+    volumes:
+      - ./hermes-sidecar-data:/opt/hermes-data
+    command: pnpm tsx scripts/bootstrap-hermes-sidecar.ts
+
+  hermes-sidecar:
+    image: nousresearch/hermes-agent:latest
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_healthy
+      hermes-bootstrap:
+        condition: service_completed_successfully
+    environment:
+      CODEX_HOME: /opt/data/.codex
+      HERMES_DASHBOARD: "1"
+      HERMES_DASHBOARD_HOST: 0.0.0.0
+      HERMES_DASHBOARD_PORT: "9119"
+      HERMES_DASHBOARD_BASIC_AUTH_USERNAME: ${TAWNY_HERMES_DASHBOARD_USERNAME}
+      HERMES_DASHBOARD_BASIC_AUTH_PASSWORD: ${TAWNY_HERMES_DASHBOARD_PASSWORD}
+      HERMES_DASHBOARD_BASIC_AUTH_SECRET: ${TAWNY_HERMES_DASHBOARD_SECRET}
+      TZ: Australia/Sydney
+    volumes:
+      - ./hermes-sidecar-data:/opt/data
+    ports:
+      - "9120:9119"
+    healthcheck:
+      test: ["CMD", "/opt/hermes/.venv/bin/python", "-c", "import urllib.error,urllib.request;\ntry: urllib.request.urlopen('http://127.0.0.1:9119/', timeout=4)\nexcept urllib.error.HTTPError as error:\n assert error.code == 401"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    command: ["gateway", "run"]
 
 volumes:
   tawny_soc_pg:

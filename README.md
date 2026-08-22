@@ -6,7 +6,7 @@ AI-focused SOC/SIEM workspace for Tawny. It receives Tawny alerts and telemetry 
 
 ### AI war room
 
-![Tawny-SOC AI war room with Detect, Triage, Hunt, and Respond agents](docs/screenshots/ai-war-room.png)
+![Tawny-SOC AI war room with 13 specialist agents and reusable workflows](docs/screenshots/ai-war-room.png)
 
 ### Global threat view
 
@@ -38,7 +38,7 @@ The local seed creates:
 - Local analyst: `analyst@tawny.local`
 - Local password: `TawnySocLocal123!`
 - Starter threat intel feed endpoints, including OpenPhish and PhishTank URL feeds
-- Representative geo-attributed alerts, an active P1 case, a four-agent investigation ledger, and proactive hunt schedules for the war room and world view
+- Representative geo-attributed alerts, an active P1 case, a five-specialist investigation ledger, and proactive hunt schedules for the war room and world view
 
 `pnpm seed` is intended for local reset work. It keeps the local analyst and organization ready, resets local SOC data, and installs the representative investigation dataset above.
 
@@ -47,7 +47,7 @@ The local seed creates:
 The SOC workspace includes:
 
 - SOC Overview: alert volume, incident volume, open cases, critical/high alerts, affected hosts, queue health, top rules, top MITRE tactics, top users, top processes, top external IPs, trends, and needs-attention items.
-- AI war room: four named agents — Detect, Triage, Hunt, and Respond — run a complete alert investigation, persist each step in a replayable evidence ledger, and expose engine mode, confidence, evidence, actions, and timestamps. High/critical ingested alerts enter the mesh automatically unless `TAWNY_AGENT_AUTORUN=false`; `TAWNY_AGENT_AUTORUN_MAX_PER_BATCH` limits model fan-out (default `5`).
+- AI war room: 13 specialist agents coordinate through six reusable workflows. Each phase has an explicit agent, methodology, scoped evidence tools, instructions, handoff, and approval state in a replayable ledger. High/critical ingested alerts enter the Incident Response workflow automatically unless `TAWNY_AGENT_AUTORUN=false`; `TAWNY_AGENT_AUTORUN_MAX_PER_BATCH` limits model fan-out (default `5`).
 - AI engine: hot-swappable Azure OpenAI or AWS Bedrock provider configured in the UI, deterministic fallbacks when AI is off, untrusted-telemetry prompt guardrails, and audit-logged runs.
 - Scalable ingestion: Tawny HTTP ingest, generic JSON, syslog/CEF, Windows Event/Sysmon, AWS CloudTrail, Azure sign-in/activity, Microsoft 365 audit, firewall/network logs, parser normalization, dead-letter tracking, and source health.
 - Connector catalog: cloud, identity, SaaS, network, endpoint, and generic connectors with required fields, credential references, safe local test actions, status, schedule, and redaction.
@@ -109,24 +109,41 @@ For bearer-token protection, create a tenant API token in `Settings -> API token
 
 ## AI War Room
 
-`/war-room` is the operational surface for the four-agent pipeline:
+`/war-room` follows the specialist-agent and workflow model used by [Vigil](https://github.com/Vigil-SOC/vigil), adapted to Tawny-SOC's tenant model, YAAQL, evidence store, approvals, and Hermes MCP surface.
 
-1. **Detect** fuses related endpoint, identity, cloud, and network signals into an attack chain.
-2. **Triage** assigns verdict, urgency, confidence, rationale, and the recommended playbook.
-3. **Hunt** enriches indicators and produces valid YAAQL pivots for retained evidence.
-4. **Respond** prepares immediate investigation steps, approval-gated containment, and verification checks.
+Specialist library:
 
-Every run is stored in `soc_agent_run`. Agent telemetry and feed values are treated as untrusted data in every model prompt. When the configured AI provider is unavailable, the same pipeline completes with deterministic, explicitly labelled fallback logic.
+- **Triage, Investigation, Threat Hunter, and Correlation** assess priority, collect evidence, test hypotheses, and reconstruct attack chains.
+- **Response and Auto-Response** prepare confidence-scored containment proposals; state-changing actions remain approval-gated.
+- **Reporting, MITRE ATT&CK, Forensics, and Compliance** produce technical, executive, control, and evidence-preservation outputs.
+- **Threat Intel, Malware, and Network** enrich observables and inspect artifact, traffic, C2, lateral-movement, and exfiltration evidence.
+
+Reusable workflows:
+
+- **Incident Response:** Triage / Investigation / Response / Reporting.
+- **Full Investigation:** Investigation / MITRE ATT&CK / Correlation / Response / Reporting.
+- **Threat Hunt:** Threat Hunter / Network / Malware / Threat Intel / Reporting.
+- **Forensic Analysis:** Forensics / Malware / Network / Reporting.
+- **Compliance Review:** Investigation / Compliance / Reporting.
+- **Autonomous Containment:** Triage / Correlation / Auto-Response / Response, with two explicit approval gates.
+
+Each phase gets its specialist system prompt, allowed evidence interfaces, prior-agent handoff, and focus-alert context. Every run is stored in `soc_agent_run` with workflow ID, engine mode, confidence, evidence, actions, tools, approval state, and timestamps. Telemetry and feed values are treated as untrusted data in every model prompt. When the configured AI provider or an individual agent is unavailable, that phase completes with deterministic, explicitly labelled specialist logic.
 
 Proactive hunts are stored in `soc_hunt_schedule`. Create, pause, resume, or run them from the war room. Schedules use five-field cron expressions with an explicit IANA timezone.
 
 ## Agent API, MCP, and Hermes
 
-Coding agents can hunt and investigate through a tenant-scoped REST API or the Streamable HTTP MCP endpoint. Create a dedicated API token under `Settings -> API tokens`; give read-only agents only `events:read`, `alerts:read`, `cases:read`, `threat-intel:read`, and `playbooks:read`.
+Coding agents can hunt and investigate through a tenant-scoped REST API or the Streamable HTTP MCP endpoint. Hermes Bot Mode profiles additionally need `agent-rooms:read` and `agent-rooms:write`. Create one named token per bot so every room event records real profile identity instead of a shared credential.
 
 Discovery endpoints:
 
 - `GET /api/v1` describes the agent surface.
+- `GET /api/v1/agents` lists specialist profiles, methods, and scoped tools.
+- `GET /api/v1/agent-workflows` lists workflow phases and approval gates.
+- `GET /api/v1/agent-rooms` lists durable collaboration rooms and ordered trace events.
+- `POST /api/v1/agent-rooms` opens a Hermes Bot Mode room.
+- `GET /api/v1/agent-rooms/{id}` replays bot messages, MCP calls, handoffs, approvals, and outcomes.
+- `POST /api/v1/agent-workflows/{id}/runs` dispatches a workflow against an `alertId`.
 - `GET /api/v1/openapi.json` returns an OpenAPI 3.1 document.
 - `POST /api/mcp` is the MCP Streamable HTTP endpoint (protocol revision `2025-11-25`, stateless JSON responses; no standalone SSE stream).
 
@@ -144,32 +161,42 @@ curl -X POST -H "Authorization: Bearer $TAWNY_SOC_TOKEN" -H "Content-Type: appli
   "http://localhost:3001/api/v1/playbooks/incident-response/runs"
 ```
 
-The MCP server is a native Hermes integration. Hermes supports remote HTTP MCP servers, so Tawny-SOC supplies the SOC tools and evidence while Hermes supplies the conversational bot surface. No coding-agent harness is required between them.
+Tawny ships 13 generated Hermes Bot Mode profiles. Every profile contains `profile.yaml` Bot metadata, specialist `SOUL.md`, `agent.bot_mode_protocol: true`, per-profile remote MCP configuration, scoped tool allowlist, and distribution metadata. Install them without touching memories, sessions, auth, or existing `.env` files:
 
-Add this to `~/.hermes/config.yaml` and put `TAWNY_SOC_TOKEN=...` in `~/.hermes/.env`:
-
-```yaml
-mcp_servers:
-  tawny_soc:
-    url: "http://192.168.1.19:3014/api/mcp"
-    headers:
-      Authorization: "Bearer ${TAWNY_SOC_TOKEN}"
-    tools:
-      include:
-        - tawny_run_agent_mesh
-        - tawny_list_agent_runs
-        - tawny_hunt
-        - tawny_list_hunt_schedules
-        - tawny_run_hunt_schedule
+```bash
+pnpm hermes:profiles:install
 ```
 
-Run `/reload-mcp` in Hermes, then ask it to list Tawny-SOC agent runs. Use a member token for investigation. An admin token with `detections:write` is required for `tawny_create_hunt_schedule`.
+Installer aborts before writing when any target profile exists. After review, `--force` replaces only generated profile files:
+
+```bash
+pnpm hermes:profiles:install -- --force
+```
+
+For every `~/.hermes/profiles/tawny-*/` directory, copy `.env.EXAMPLE` to `.env`, add that profile's dedicated `TAWNY_SOC_TOKEN`, and keep `TAWNY_SOC_MCP_URL` pointed at `http://192.168.1.19:3014/api/mcp`. In Hermes desktop, create group **Tawny SOC War Room** and add all 13 profiles. Bot Mode injects native `message_agent`; each `SOUL.md` requires bots to mirror messages and handoffs into Tawny and include `roomId` plus `agentId` on every MCP call.
+
+The homelab Compose stack automates this as an isolated `hermes-sidecar` service. `hermes-bootstrap` creates or refreshes all 13 profiles, marks new profile gateways for supervised startup, preserves valid per-bot tokens across redeployments, and stores credentials only under the ignored `hermes-sidecar-data/` bind mount. The sidecar dashboard is published on LAN port `9120`; Tawny remains on `3014`. Set the three `TAWNY_HERMES_DASHBOARD_*` secrets in the deployment `.env`, copy a valid Codex CLI credential to `hermes-sidecar-data/.codex/auth.json`, import it into the isolated Hermes `hermes-sidecar-data/auth.json` store, then deploy:
+
+```bash
+docker compose -f docker-compose.homelab.yml up -d --build
+```
+
+The sidecar uses the internal `http://app:3001/api/mcp` service address, so its bot credentials and MCP traffic do not need to leave the Compose network. The separately deployed general-purpose Hermes service is not modified.
+
+Tawny records append-only room events in `soc_agent_room_event`: actor, specialist identity, target, event type, status, phase, tool, sanitized input/output payload, and timestamp. `/war-room` shows ordered transcript. Containment remains owner-approved.
 
 Tool discovery is filtered to the scopes on the presented token:
 
 - `tawny_hunt`: run tenant-scoped YAAQL searches across alerts and telemetry.
 - `tawny_get_alert`: pull alert payload, detection, confidence, and ATT&CK context.
-- `tawny_run_agent_mesh`: run Detect, Triage, Hunt, and Respond and persist the investigation ledger.
+- `tawny_list_soc_agents`: discover the 13 specialist profiles, methodologies, tools, and reasoning modes.
+- `tawny_list_agent_workflows`: discover ordered workflow phases and approval gates.
+- `tawny_open_agent_room`: open durable room for one alert and workflow.
+- `tawny_get_agent_room`: replay complete ordered collaboration trace.
+- `tawny_post_agent_message`: mirror native Bot Mode messages, decisions, handoffs, completions, and approval requests.
+- `tawny_close_agent_room`: complete room with final attributed summary.
+- `tawny_run_agent_workflow`: dispatch a selected specialist workflow against an alert.
+- `tawny_run_agent_mesh`: compatibility alias that runs the default Incident Response workflow.
 - `tawny_list_agent_runs`: replay agent steps, evidence, actions, engine mode, and timestamps.
 - `tawny_list_hunt_schedules`: inspect proactive hunt cadence and last finding counts.
 - `tawny_run_hunt_schedule`: run one saved hunt immediately and persist its findings.

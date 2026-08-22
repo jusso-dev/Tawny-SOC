@@ -1,25 +1,29 @@
 import { randomUUID } from "node:crypto";
-import { and, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import cron from "node-cron";
-import { runDetectAgent } from "@/lib/ai/agents/detect";
-import { runEnrichmentAgent } from "@/lib/ai/agents/enrichment";
-import { runRespondAgent } from "@/lib/ai/agents/respond";
-import { runTriageAgent } from "@/lib/ai/agents/triage";
+import { isSocAgentId, socAgentProfiles, type SocAgentId } from "@/lib/ai/agents/catalog";
+import { runSpecialistAgent } from "@/lib/ai/agents/specialist";
 import { huntTenant } from "@/lib/agent-api";
+import { agentWorkflows, defaultAgentWorkflowId, getAgentWorkflow } from "@/lib/agent-workflows";
 import { db, schema } from "@/lib/db/client";
-import { playbooks } from "@/lib/rules";
 import { listSigmaRules } from "@/lib/sigma";
 import { extractAlertContext } from "@/lib/soc-domain";
 import { listAlerts, listEvents, listThreatIntelMatches, recordAuditLog, type SocActor } from "@/lib/store";
 
 export type AgentStep = {
-  agent: "Detect" | "Triage" | "Hunt" | "Respond";
+  agent: string;
+  agentId?: SocAgentId;
+  phaseId?: string;
+  phaseName?: string;
   status: "completed" | "failed";
   summary: string;
   engine: string;
   confidence?: number;
   evidence: string[];
   actions: string[];
+  handoff?: string[];
+  tools?: string[];
+  approvalRequired?: boolean;
   startedAt: string;
   completedAt: string;
 };
@@ -28,15 +32,34 @@ export type AgentRun = {
   id: string;
   tenantId: string;
   alertId?: string;
+  workflowId?: string;
   trigger: string;
   status: string;
   title: string;
   summary: string;
   steps: AgentStep[];
+  events: AgentRoomEvent[];
   findings: Array<Record<string, unknown>>;
   initiatedBy: string;
   startedAt: string;
   completedAt?: string;
+};
+
+export type AgentRoomEvent = {
+  id: string;
+  sequence: number;
+  runId: string;
+  eventType: string;
+  status: string;
+  actorId?: string;
+  actorName: string;
+  agentId?: SocAgentId;
+  targetAgentId?: SocAgentId;
+  phaseId?: string;
+  toolName?: string;
+  summary: string;
+  detail: Record<string, unknown>;
+  createdAt: string;
 };
 
 export type HuntSchedule = {
@@ -56,14 +79,28 @@ export type HuntSchedule = {
   updatedAt: string;
 };
 
+export function listSocAgents() {
+  return socAgentProfiles;
+}
+
+export function listAgentWorkflows() {
+  return agentWorkflows;
+}
+
 export async function runAgentMesh(input: { tenantId: string; alertId: string; actorName: string; trigger?: string }) {
+  return runAgentWorkflow({ ...input, workflowId: defaultAgentWorkflowId });
+}
+
+export async function runAgentWorkflow(input: { tenantId: string; alertId: string; workflowId?: string; actorName: string; trigger?: string }) {
+  const workflow = getAgentWorkflow(input.workflowId ?? defaultAgentWorkflowId);
+  if (!workflow) throw new Error("Agent workflow not found.");
   if (input.trigger === "automatic-ingest") {
     const [existing] = await db.select().from(schema.socAgentRun).where(and(
       eq(schema.socAgentRun.tenantId, input.tenantId),
       eq(schema.socAgentRun.alertId, input.alertId),
       eq(schema.socAgentRun.trigger, "automatic-ingest"),
     )).limit(1);
-    if (existing) return { id: existing.id, status: existing.status, summary: existing.summary, steps: existing.steps as AgentStep[], findings: existing.findings };
+    if (existing) return getAgentRoom(input.tenantId, existing.id);
   }
   const startedAt = new Date();
   const runId = `agent-run-${randomUUID()}`;
@@ -81,53 +118,313 @@ export async function runAgentMesh(input: { tenantId: string; alertId: string; a
     id: runId,
     tenantId: input.tenantId,
     alertId: alert.id,
+    workflowId: workflow.id,
     trigger: input.trigger ?? "manual",
     status: "running",
-    title: alert.title,
+    title: `${workflow.name}: ${alert.title}`,
     initiatedBy: input.actorName,
     startedAt,
   });
 
+  const steps: AgentStep[] = [];
   try {
-    const detectStarted = new Date().toISOString();
-    const detect = await runDetectAgent(input.tenantId, { alert, related: [...alerts, ...events].filter((event) => event.id !== alert.id), matchedRules });
-    const triageStarted = new Date().toISOString();
-    const triage = await runTriageAgent(input.tenantId, { alert, matchedRules, playbooks });
-    const huntStarted = new Date().toISOString();
-    const hunt = await runEnrichmentAgent(input.tenantId, { alert, indicators: alert.tiMatches ?? [] });
-    const respondStarted = new Date().toISOString();
-    const respond = await runRespondAgent(input.tenantId, { alert, triage, hunt, playbooks });
+    await appendAgentRoomEvent({
+      tenantId: input.tenantId,
+      runId,
+      eventType: "room.opened",
+      status: "running",
+      actorName: input.actorName,
+      summary: `${workflow.name} room opened for ${alert.title}.`,
+      detail: { workflowId: workflow.id, alertId: alert.id, trigger: input.trigger ?? "manual" },
+    });
+    const relatedSignals = [...alerts, ...events]
+      .filter((event) => event.id !== alert.id)
+      .sort((left, right) => signalRelevance(right, alert) - signalRelevance(left, alert));
+    for (const [phaseIndex, phase] of workflow.phases.entries()) {
+      const phaseStarted = new Date();
+      const profile = socAgentProfiles.find((agent) => agent.id === phase.agent);
+      await appendAgentRoomEvent({
+        tenantId: input.tenantId,
+        runId,
+        eventType: "agent.started",
+        status: "running",
+        actorName: profile?.name ?? phase.agent,
+        agentId: phase.agent,
+        phaseId: phase.id,
+        summary: `${phase.name} started.`,
+        detail: { instructions: phase.instructions, tools: phase.tools, approvalRequired: Boolean(phase.approvalRequired) },
+      });
+      const result = await runSpecialistAgent(input.tenantId, phase.agent, phase, {
+        alert,
+        relatedSignals,
+        matchedRules,
+        indicators: alert.tiMatches ?? [],
+        priorSteps: steps.map((step) => ({ agent: step.agent, summary: step.summary, evidence: step.evidence, actions: step.handoff ?? step.actions })),
+      });
+      const completedAt = new Date();
+      const step: AgentStep = {
+        agent: profile?.name ?? phase.agent,
+        agentId: phase.agent,
+        phaseId: phase.id,
+        phaseName: phase.name,
+        status: "completed",
+        summary: result.summary,
+        engine: result.meta.engine,
+        confidence: result.confidence,
+        evidence: result.evidence,
+        actions: result.actions,
+        handoff: result.handoff,
+        tools: phase.tools,
+        approvalRequired: phase.approvalRequired,
+        startedAt: phaseStarted.toISOString(),
+        completedAt: completedAt.toISOString(),
+      };
+      steps.push(step);
+      await db.update(schema.socAgentRun).set({ steps, summary: `${phase.name} completed by ${step.agent}.` }).where(eq(schema.socAgentRun.id, runId));
+      await appendAgentRoomEvent({
+        tenantId: input.tenantId,
+        runId,
+        eventType: "agent.completed",
+        status: "completed",
+        actorName: step.agent,
+        agentId: phase.agent,
+        phaseId: phase.id,
+        summary: result.summary,
+        detail: { engine: result.meta.engine, confidence: result.confidence, evidence: result.evidence, actions: result.actions, handoff: result.handoff },
+      });
+      if (phase.approvalRequired) {
+        await appendAgentRoomEvent({
+          tenantId: input.tenantId,
+          runId,
+          eventType: "approval.requested",
+          status: "waiting",
+          actorName: step.agent,
+          agentId: phase.agent,
+          phaseId: phase.id,
+          summary: `${phase.name} produced approval-gated actions.`,
+          detail: { actions: result.actions, evidence: result.evidence },
+        });
+      }
+      const nextPhase = workflow.phases[phaseIndex + 1];
+      if (nextPhase) {
+        await appendAgentRoomEvent({
+          tenantId: input.tenantId,
+          runId,
+          eventType: "agent.handoff",
+          status: "sent",
+          actorName: step.agent,
+          agentId: phase.agent,
+          targetAgentId: nextPhase.agent,
+          phaseId: phase.id,
+          summary: `${step.agent} handed room context to ${socAgentProfiles.find((agent) => agent.id === nextPhase.agent)?.name ?? nextPhase.agent}.`,
+          detail: { messages: result.handoff, evidence: result.evidence },
+        });
+      }
+    }
     const completedAt = new Date();
-    const steps: AgentStep[] = [
-      { agent: "Detect", status: "completed", summary: detect.summary, engine: detect.meta.engine, confidence: detect.confidence, evidence: detect.signalIds, actions: detect.attackChain, startedAt: detectStarted, completedAt: triageStarted },
-      { agent: "Triage", status: "completed", summary: triage.summary, engine: triage.meta.engine, confidence: triage.confidence, evidence: triage.rationale, actions: triage.recommendedActions, startedAt: triageStarted, completedAt: huntStarted },
-      { agent: "Hunt", status: "completed", summary: hunt.summary, engine: hunt.meta.engine, evidence: hunt.indicators.map((item) => `${item.type}:${item.value}`), actions: hunt.huntQueries, startedAt: huntStarted, completedAt: respondStarted },
-      { agent: "Respond", status: "completed", summary: respond.summary, engine: respond.meta.engine, evidence: respond.verificationSteps, actions: [...respond.immediateActions, ...respond.approvalGatedActions.map((action) => `Approval required: ${action}`)], startedAt: respondStarted, completedAt: completedAt.toISOString() },
-    ];
     const findings = [
-      { type: "verdict", value: triage.verdict, confidence: triage.confidence },
-      { type: "playbook", value: respond.playbookId },
-      { type: "attack-chain", value: detect.attackChain },
-      { type: "hunt-queries", value: hunt.huntQueries },
+      { type: "workflow", value: workflow.id },
+      { type: "agents", value: workflow.phases.map((phase) => phase.agent) },
+      { type: "approval-gates", value: workflow.phases.filter((phase) => phase.approvalRequired).map((phase) => phase.id) },
     ];
-    const summary = `${triage.verdict.replace("_", " ")} at ${Math.round(triage.confidence * 100)}% confidence. ${respond.summary}`;
+    const summary = `${workflow.name} completed ${steps.length} specialist phases. ${steps.at(-1)?.summary ?? "Investigation ledger complete."}`;
     await db.update(schema.socAgentRun).set({ status: "completed", summary, steps, findings, completedAt }).where(eq(schema.socAgentRun.id, runId));
-    await recordAuditLog({ tenantId: input.tenantId, action: "agent.mesh.completed", resourceType: "agent-run", resourceId: runId, detail: summary });
-    return { id: runId, status: "completed", summary, steps, findings };
+    await appendAgentRoomEvent({ tenantId: input.tenantId, runId, eventType: "room.completed", status: "completed", actorName: input.actorName, summary, detail: { workflowId: workflow.id, phases: steps.length } });
+    await recordAuditLog({ tenantId: input.tenantId, action: "agent.workflow.completed", resourceType: "agent-run", resourceId: runId, detail: summary, metadata: { workflowId: workflow.id, agents: workflow.phases.map((phase) => phase.agent) } });
+    return getAgentRoom(input.tenantId, runId);
   } catch (error) {
-    const detail = error instanceof Error ? error.message : "Agent mesh failed.";
-    await db.update(schema.socAgentRun).set({ status: "failed", summary: detail, completedAt: new Date() }).where(eq(schema.socAgentRun.id, runId));
+    const detail = error instanceof Error ? error.message : "Agent workflow failed.";
+    await db.update(schema.socAgentRun).set({ status: "failed", summary: detail, steps, completedAt: new Date() }).where(eq(schema.socAgentRun.id, runId));
+    await appendAgentRoomEvent({ tenantId: input.tenantId, runId, eventType: "room.failed", status: "failed", actorName: input.actorName, summary: detail }).catch(() => undefined);
     throw error;
   }
 }
 
 export async function listAgentRuns(tenantId: string, limit = 20): Promise<AgentRun[]> {
   const rows = await db.select().from(schema.socAgentRun).where(eq(schema.socAgentRun.tenantId, tenantId)).orderBy(desc(schema.socAgentRun.startedAt)).limit(limit);
-  return rows.map((row) => ({
-    id: row.id, tenantId: row.tenantId, alertId: row.alertId ?? undefined, trigger: row.trigger, status: row.status,
-    title: row.title, summary: row.summary, steps: row.steps as AgentStep[], findings: row.findings,
+  if (!rows.length) return [];
+  const eventRows = await db.select().from(schema.socAgentRoomEvent).where(and(
+    eq(schema.socAgentRoomEvent.tenantId, tenantId),
+    inArray(schema.socAgentRoomEvent.runId, rows.map((row) => row.id)),
+  )).orderBy(asc(schema.socAgentRoomEvent.sequence));
+  return rows.map((row) => mapAgentRun(row, eventRows.filter((event) => event.runId === row.id)));
+}
+
+export async function getAgentRoom(tenantId: string, roomId: string): Promise<AgentRun> {
+  const [row] = await db.select().from(schema.socAgentRun).where(and(eq(schema.socAgentRun.tenantId, tenantId), eq(schema.socAgentRun.id, roomId))).limit(1);
+  if (!row) throw new Error("Agent room not found.");
+  const events = await db.select().from(schema.socAgentRoomEvent).where(and(
+    eq(schema.socAgentRoomEvent.tenantId, tenantId),
+    eq(schema.socAgentRoomEvent.runId, roomId),
+  )).orderBy(asc(schema.socAgentRoomEvent.sequence));
+  return mapAgentRun(row, events);
+}
+
+export async function openAgentRoom(input: { tenantId: string; alertId: string; workflowId: string; actorId?: string; actorName: string; agentId: SocAgentId; title?: string }) {
+  const workflow = getAgentWorkflow(input.workflowId);
+  if (!workflow) throw new Error("Agent workflow not found.");
+  const alert = (await listAlerts(input.tenantId)).find((item) => item.id === input.alertId);
+  if (!alert) throw new Error("Alert not found.");
+  const roomId = `agent-run-${randomUUID()}`;
+  const startedAt = new Date();
+  await db.insert(schema.socAgentRun).values({
+    id: roomId,
+    tenantId: input.tenantId,
+    alertId: alert.id,
+    workflowId: workflow.id,
+    trigger: "hermes-bot-mode",
+    status: "collaborating",
+    title: input.title?.trim() || `${workflow.name}: ${alert.title}`,
+    initiatedBy: input.actorName,
+    startedAt,
+  });
+  await appendAgentRoomEvent({
+    tenantId: input.tenantId,
+    runId: roomId,
+    eventType: "room.opened",
+    status: "collaborating",
+    actorId: input.actorId,
+    actorName: input.actorName,
+    agentId: input.agentId,
+    summary: `${workflow.name} Hermes Bot Mode room opened for ${alert.title}.`,
+    detail: { workflowId: workflow.id, alertId: alert.id, phases: workflow.phases.map((phase) => ({ id: phase.id, agent: phase.agent, approvalRequired: Boolean(phase.approvalRequired) })) },
+  });
+  return getAgentRoom(input.tenantId, roomId);
+}
+
+const roomMessageTypes = ["message", "handoff", "decision", "status", "approval.requested", "agent.completed"] as const;
+export type AgentRoomMessageType = typeof roomMessageTypes[number];
+
+export async function postAgentRoomMessage(input: {
+  tenantId: string;
+  roomId: string;
+  actorId?: string;
+  actorName: string;
+  agentId: SocAgentId;
+  targetAgentId?: SocAgentId;
+  phaseId?: string;
+  messageType: AgentRoomMessageType;
+  message: string;
+  evidence?: string[];
+  actions?: string[];
+}) {
+  if (!roomMessageTypes.includes(input.messageType)) throw new Error("Invalid room message type.");
+  if (!input.message.trim()) throw new Error("message is required.");
+  return appendAgentRoomEvent({
+    tenantId: input.tenantId,
+    runId: input.roomId,
+    eventType: input.messageType === "handoff" ? "agent.handoff" : input.messageType,
+    status: input.messageType === "approval.requested" ? "waiting" : input.messageType === "agent.completed" ? "completed" : "sent",
+    actorId: input.actorId,
+    actorName: input.actorName,
+    agentId: input.agentId,
+    targetAgentId: input.targetAgentId,
+    phaseId: input.phaseId,
+    summary: input.message.trim(),
+    detail: { evidence: input.evidence ?? [], actions: input.actions ?? [] },
+  });
+}
+
+export async function closeAgentRoom(input: { tenantId: string; roomId: string; actorId?: string; actorName: string; agentId: SocAgentId; summary: string }) {
+  if (!input.summary.trim()) throw new Error("summary is required.");
+  const completedAt = new Date();
+  const [row] = await db.update(schema.socAgentRun).set({ status: "completed", summary: input.summary.trim(), completedAt })
+    .where(and(eq(schema.socAgentRun.tenantId, input.tenantId), eq(schema.socAgentRun.id, input.roomId))).returning({ id: schema.socAgentRun.id });
+  if (!row) throw new Error("Agent room not found.");
+  await appendAgentRoomEvent({
+    tenantId: input.tenantId,
+    runId: input.roomId,
+    eventType: "room.completed",
+    status: "completed",
+    actorId: input.actorId,
+    actorName: input.actorName,
+    agentId: input.agentId,
+    summary: input.summary.trim(),
+  });
+  return getAgentRoom(input.tenantId, input.roomId);
+}
+
+export async function appendAgentRoomEvent(input: {
+  tenantId: string;
+  runId: string;
+  eventType: string;
+  status: string;
+  actorId?: string;
+  actorName: string;
+  agentId?: SocAgentId;
+  targetAgentId?: SocAgentId;
+  phaseId?: string;
+  toolName?: string;
+  summary: string;
+  detail?: Record<string, unknown>;
+}) {
+  if (input.agentId && !isSocAgentId(input.agentId)) throw new Error("Invalid SOC agent ID.");
+  if (input.targetAgentId && !isSocAgentId(input.targetAgentId)) throw new Error("Invalid target SOC agent ID.");
+  const [room] = await db.select({ id: schema.socAgentRun.id }).from(schema.socAgentRun).where(and(
+    eq(schema.socAgentRun.tenantId, input.tenantId),
+    eq(schema.socAgentRun.id, input.runId),
+  )).limit(1);
+  if (!room) throw new Error("Agent room not found.");
+  const [event] = await db.insert(schema.socAgentRoomEvent).values({
+    id: `room-event-${randomUUID()}`,
+    tenantId: input.tenantId,
+    runId: input.runId,
+    eventType: input.eventType,
+    status: input.status,
+    actorId: input.actorId,
+    actorName: input.actorName,
+    agentId: input.agentId,
+    targetAgentId: input.targetAgentId,
+    phaseId: input.phaseId,
+    toolName: input.toolName,
+    summary: input.summary,
+    detail: input.detail ?? {},
+    createdAt: new Date(),
+  }).returning();
+  return mapAgentRoomEvent(event);
+}
+
+type AgentRunRow = typeof schema.socAgentRun.$inferSelect;
+type AgentRoomEventRow = typeof schema.socAgentRoomEvent.$inferSelect;
+
+function mapAgentRun(row: AgentRunRow, events: AgentRoomEventRow[]): AgentRun {
+  return {
+    id: row.id, tenantId: row.tenantId, alertId: row.alertId ?? undefined, workflowId: row.workflowId ?? readWorkflowId(row.findings), trigger: row.trigger, status: row.status,
+    title: row.title, summary: row.summary, steps: row.steps as AgentStep[], events: events.map(mapAgentRoomEvent), findings: row.findings,
     initiatedBy: row.initiatedBy, startedAt: row.startedAt.toISOString(), completedAt: row.completedAt?.toISOString(),
-  }));
+  };
+}
+
+function mapAgentRoomEvent(row: AgentRoomEventRow): AgentRoomEvent {
+  return {
+    id: row.id,
+    sequence: row.sequence,
+    runId: row.runId,
+    eventType: row.eventType,
+    status: row.status,
+    actorId: row.actorId ?? undefined,
+    actorName: row.actorName,
+    agentId: isSocAgentId(row.agentId) ? row.agentId : undefined,
+    targetAgentId: isSocAgentId(row.targetAgentId) ? row.targetAgentId : undefined,
+    phaseId: row.phaseId ?? undefined,
+    toolName: row.toolName ?? undefined,
+    summary: row.summary,
+    detail: row.detail,
+    createdAt: row.createdAt.toISOString(),
+  };
+}
+
+function readWorkflowId(findings: Array<Record<string, unknown>>) {
+  const value = findings.find((finding) => finding.type === "workflow")?.value;
+  return typeof value === "string" ? value : undefined;
+}
+
+function signalRelevance(signal: Awaited<ReturnType<typeof listEvents>>[number], alert: ReturnType<typeof extractAlertContext>) {
+  let score = 0;
+  if (signal.hostname && signal.hostname === alert.hostname) score += 5;
+  score += signal.mitreTechniques.filter((technique) => alert.mitreTechniques.includes(technique)).length * 2;
+  if (Math.abs(Date.parse(signal.timestamp) - Date.parse(alert.timestamp)) <= 60 * 60_000) score += 1;
+  return score;
 }
 
 export async function listHuntSchedules(tenantId?: string): Promise<HuntSchedule[]> {
@@ -173,9 +470,12 @@ export async function runHuntSchedule(tenantId: string, id: string, trigger = "m
   const completedAt = new Date();
   const step: AgentStep = { agent: "Hunt", status: "completed", summary, engine: "deterministic", evidence: findings.map((item) => String(item.id)), actions: [row.query], startedAt: startedAt.toISOString(), completedAt: completedAt.toISOString() };
   await db.transaction(async (tx) => {
-    await tx.insert(schema.socAgentRun).values({ id: runId, tenantId, trigger: `hunt-schedule:${trigger}`, status: "completed", title: row.name, summary, steps: [step], findings, initiatedBy: trigger === "scheduled" ? "Hunt scheduler" : "Analyst", startedAt, completedAt });
+    await tx.insert(schema.socAgentRun).values({ id: runId, tenantId, workflowId: "scheduled-threat-hunt", trigger: `hunt-schedule:${trigger}`, status: "completed", title: row.name, summary, steps: [step], findings, initiatedBy: trigger === "scheduled" ? "Hunt scheduler" : "Analyst", startedAt, completedAt });
     await tx.update(schema.socHuntSchedule).set({ lastRunAt: startedAt, lastStatus: "completed", lastFindingCount: result.totalMatched, updatedAt: completedAt }).where(eq(schema.socHuntSchedule.id, id));
   });
+  await appendAgentRoomEvent({ tenantId, runId, eventType: "room.opened", status: "running", actorName: trigger === "scheduled" ? "Hunt scheduler" : "Analyst", agentId: "threat_hunter", summary: `${row.name} scheduled hunt room opened.`, detail: { scheduleId: id, hypothesis: row.hypothesis, query: row.query } });
+  await appendAgentRoomEvent({ tenantId, runId, eventType: "agent.completed", status: "completed", actorName: "Threat Hunter", agentId: "threat_hunter", summary, detail: { findingCount: result.totalMatched, evidence: step.evidence } });
+  await appendAgentRoomEvent({ tenantId, runId, eventType: "room.completed", status: "completed", actorName: trigger === "scheduled" ? "Hunt scheduler" : "Analyst", agentId: "threat_hunter", summary });
   return { id: runId, summary, findingCount: result.totalMatched };
 }
 

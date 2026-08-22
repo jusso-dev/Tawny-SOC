@@ -12,6 +12,8 @@ export const apiTokenScopes = [
   { id: "playbooks:read", label: "Read playbooks", detail: "Inspect SOAR playbooks, plans, and run history." },
   { id: "playbooks:run", label: "Run playbooks", detail: "Start SOAR runs and execute non-destructive automation." },
   { id: "playbooks:approve", label: "Approve response actions", detail: "Approve gated containment and response actions." },
+  { id: "agent-rooms:read", label: "Read agent rooms", detail: "Read specialist room messages, tool traces, handoffs, and outcomes." },
+  { id: "agent-rooms:write", label: "Write agent rooms", detail: "Open rooms and append attributed Hermes bot messages and trace events." },
   { id: "settings:read", label: "Read settings", detail: "Read tenant configuration and audit state." },
 ] as const;
 
@@ -22,5 +24,5 @@ export type ApiTokenStatus = "active" | "revoked";
 export function allowedApiTokenScopesForRole(role: ApiTokenRole): ApiTokenScope[] {
   if (role === "owner") return apiTokenScopes.map((scope) => scope.id);
   if (role === "admin") return apiTokenScopes.map((scope) => scope.id).filter((scope) => scope !== "playbooks:approve");
-  return ["ingest:write", "events:read", "alerts:read", "cases:read", "threat-intel:read", "playbooks:read"];
+  return ["ingest:write", "events:read", "alerts:read", "cases:read", "threat-intel:read", "playbooks:read", "agent-rooms:read", "agent-rooms:write"];
 }

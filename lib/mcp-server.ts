@@ -1,5 +1,6 @@
 import type { ApiPrincipal } from "@/lib/api-auth";
 import type { ApiTokenScope } from "@/lib/api-token-policy";
+import { isSocAgentId, socAgentIds } from "@/lib/ai/agents/catalog";
 import {
   getSoarRun,
   getTenantAlert,
@@ -10,7 +11,22 @@ import {
   listTenantIndicators,
 } from "@/lib/agent-api";
 import { approveSoarAction, startSoarRun } from "@/lib/soar";
-import { createHuntSchedule, listAgentRuns, listHuntSchedules, runAgentMesh, runHuntSchedule } from "@/lib/war-room";
+import {
+  appendAgentRoomEvent,
+  closeAgentRoom,
+  createHuntSchedule,
+  getAgentRoom,
+  listAgentRuns,
+  listAgentWorkflows,
+  listHuntSchedules,
+  listSocAgents,
+  openAgentRoom,
+  postAgentRoomMessage,
+  runAgentMesh,
+  runAgentWorkflow,
+  runHuntSchedule,
+  type AgentRoomMessageType,
+} from "@/lib/war-room";
 
 export const MCP_PROTOCOL_VERSION = "2025-11-25";
 export const MCP_SUPPORTED_VERSIONS = ["2025-03-26", "2025-06-18", MCP_PROTOCOL_VERSION];
@@ -53,9 +69,83 @@ export const mcpTools: McpToolDefinition[] = [
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   },
   {
+    name: "tawny_list_soc_agents",
+    title: "List SOC specialist agents",
+    description: "Discover Tawny-SOC specialist profiles, methodologies, scoped tools, model budgets, and reasoning modes.",
+    requiredScope: "alerts:read",
+    inputSchema: objectSchema({}),
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  },
+  {
+    name: "tawny_list_agent_workflows",
+    title: "List multi-agent workflows",
+    description: "Discover reusable SOC workflows and their ordered specialist phases, tool grants, instructions, and approval gates.",
+    requiredScope: "playbooks:read",
+    inputSchema: objectSchema({}),
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  },
+  {
+    name: "tawny_open_agent_room",
+    title: "Open shared Hermes agent room",
+    description: "Open a durable Tawny-SOC room for one alert and workflow. Returns roomId used by every bot message and traced MCP call.",
+    requiredScope: "agent-rooms:write",
+    inputSchema: objectSchema({
+      alertId: { type: "string" },
+      workflowId: { type: "string" },
+      agentId: { type: "string", enum: socAgentIds },
+      title: { type: "string" },
+    }, ["alertId", "workflowId", "agentId"]),
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+  },
+  {
+    name: "tawny_get_agent_room",
+    title: "Read shared agent room",
+    description: "Read complete ordered room history: bot messages, MCP tool inputs and outputs, handoffs, decisions, approvals, and outcomes.",
+    requiredScope: "agent-rooms:read",
+    inputSchema: objectSchema({ roomId: { type: "string" }, agentId: { type: "string", enum: socAgentIds } }, ["roomId"]),
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  },
+  {
+    name: "tawny_post_agent_message",
+    title: "Post attributed bot message",
+    description: "Mirror one Hermes bot message, handoff, decision, status, completion, or approval request into shared Tawny-SOC room.",
+    requiredScope: "agent-rooms:write",
+    inputSchema: objectSchema({
+      roomId: { type: "string" },
+      agentId: { type: "string", enum: socAgentIds },
+      targetAgentId: { type: "string", enum: socAgentIds },
+      phaseId: { type: "string" },
+      messageType: { type: "string", enum: ["message", "handoff", "decision", "status", "approval.requested", "agent.completed"] },
+      message: { type: "string", minLength: 1 },
+      evidence: { type: "array", items: { type: "string" } },
+      actions: { type: "array", items: { type: "string" } },
+    }, ["roomId", "agentId", "messageType", "message"]),
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+  },
+  {
+    name: "tawny_close_agent_room",
+    title: "Close shared agent room",
+    description: "Complete a Hermes Bot Mode room with final attributed summary. Does not approve or execute response actions.",
+    requiredScope: "agent-rooms:write",
+    inputSchema: objectSchema({
+      roomId: { type: "string" },
+      agentId: { type: "string", enum: socAgentIds },
+      summary: { type: "string", minLength: 1 },
+    }, ["roomId", "agentId", "summary"]),
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+  },
+  {
+    name: "tawny_run_agent_workflow",
+    title: "Run specialist SOC workflow",
+    description: "Run one named multi-agent workflow against a tenant alert and persist every specialist handoff in the evidence ledger.",
+    requiredScope: "alerts:read",
+    inputSchema: objectSchema({ alertId: { type: "string" }, workflowId: { type: "string" } }, ["alertId", "workflowId"]),
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+  },
+  {
     name: "tawny_run_agent_mesh",
-    title: "Run four-agent investigation",
-    description: "Run Tawny-SOC Detect, Triage, Hunt, and Respond against one tenant alert and persist the evidence ledger. Response output is a plan; containment is never executed here.",
+    title: "Run default incident-response workflow",
+    description: "Compatibility alias for Tawny-SOC incident-response workflow. Persists specialist handoffs; containment is never executed here.",
     requiredScope: "alerts:read",
     inputSchema: objectSchema({ alertId: { type: "string" } }, ["alertId"]),
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
@@ -63,7 +153,7 @@ export const mcpTools: McpToolDefinition[] = [
   {
     name: "tawny_list_agent_runs",
     title: "List agent investigation ledgers",
-    description: "Read recent four-agent investigation runs including step summaries, evidence, actions, engine mode, and timestamps.",
+    description: "Read recent multi-agent workflow runs including specialist summaries, handoffs, evidence, actions, engine mode, and timestamps.",
     requiredScope: "alerts:read",
     inputSchema: objectSchema({ limit: { type: "integer", minimum: 1, maximum: 50, default: 10 } }),
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
@@ -182,8 +272,8 @@ export async function handleMcpMessage(message: unknown, principal: ApiPrincipal
     return rpcResult(request.id ?? null, {
       protocolVersion: MCP_SUPPORTED_VERSIONS.includes(requested) ? requested : MCP_PROTOCOL_VERSION,
       capabilities: { tools: { listChanged: false } },
-      serverInfo: { name: "tawny-soc", title: "Tawny-SOC AI War Room", version: "0.2.0" },
-      instructions: "Use tawny_run_agent_mesh for alert investigation and tawny_hunt for scoped evidence collection. Preview playbooks before execution. Never approve containment without explicit user authorization.",
+      serverInfo: { name: "tawny-soc", title: "Tawny-SOC Specialist AI War Room", version: "0.3.0" },
+      instructions: "Hermes Bot Mode profiles must open or join a Tawny agent room, include roomId and agentId on every Tawny tool call, mirror native message_agent handoffs with tawny_post_agent_message, and close only after every phase is accounted for. Preview playbooks before execution. Never approve containment without explicit user authorization.",
     });
   }
   if (request.method === "tools/list") return rpcResult(request.id ?? null, { tools: listMcpTools(principal) });
@@ -194,11 +284,48 @@ export async function handleMcpMessage(message: unknown, principal: ApiPrincipal
     const tool = mcpTools.find((item) => item.name === params.name);
     if (!tool) return rpcError(request.id ?? null, -32602, `Unknown tool: ${params.name}`);
     if (!principal.scopes.includes(tool.requiredScope)) return rpcError(request.id ?? null, -32003, `Missing scope: ${tool.requiredScope}`);
+    const trace = toolTraceContext(args);
+    const automaticTrace = trace && params.name !== "tawny_open_agent_room" && params.name !== "tawny_close_agent_room" ? trace : undefined;
     try {
+      if (automaticTrace) await appendAgentRoomEvent({
+        tenantId: principal.tenantId,
+        runId: automaticTrace.roomId,
+        eventType: "tool.started",
+        status: "running",
+        actorId: principal.id,
+        actorName: principal.name,
+        agentId: automaticTrace.agentId,
+        toolName: params.name,
+        summary: `${tool.title} started.`,
+        detail: { input: traceValue(args) },
+      });
       const output = await invokeMcpTool(params.name, args, principal);
+      if (automaticTrace) await appendAgentRoomEvent({
+        tenantId: principal.tenantId,
+        runId: automaticTrace.roomId,
+        eventType: "tool.completed",
+        status: "completed",
+        actorId: principal.id,
+        actorName: principal.name,
+        agentId: automaticTrace.agentId,
+        toolName: params.name,
+        summary: `${tool.title} completed.`,
+        detail: { output: traceValue(output) },
+      });
       return rpcResult(request.id ?? null, toolResult(output));
     } catch (error) {
       const detail = error instanceof Error ? error.message : "Tool execution failed.";
+      if (automaticTrace) await appendAgentRoomEvent({
+        tenantId: principal.tenantId,
+        runId: automaticTrace.roomId,
+        eventType: "tool.failed",
+        status: "failed",
+        actorId: principal.id,
+        actorName: principal.name,
+        agentId: automaticTrace.agentId,
+        toolName: params.name,
+        summary: `${tool.title} failed: ${detail}`,
+      }).catch(() => undefined);
       return rpcResult(request.id ?? null, { content: [{ type: "text", text: detail }], isError: true });
     }
   }
@@ -219,6 +346,40 @@ async function invokeMcpTool(name: string, args: Record<string, unknown>, princi
     if (!alert) throw new Error("Alert not found.");
     return { alert };
   }
+  if (name === "tawny_list_soc_agents") return { agents: listSocAgents() };
+  if (name === "tawny_list_agent_workflows") return { workflows: listAgentWorkflows() };
+  if (name === "tawny_open_agent_room") return { room: await openAgentRoom({
+    tenantId: principal.tenantId,
+    alertId: requiredString(args.alertId, "alertId"),
+    workflowId: requiredString(args.workflowId, "workflowId"),
+    actorId: principal.id,
+    actorName: principal.name,
+    agentId: requiredAgentId(args.agentId, "agentId"),
+    title: optionalString(args.title),
+  }) };
+  if (name === "tawny_get_agent_room") return { room: await getAgentRoom(principal.tenantId, requiredString(args.roomId, "roomId")) };
+  if (name === "tawny_post_agent_message") return { event: await postAgentRoomMessage({
+    tenantId: principal.tenantId,
+    roomId: requiredString(args.roomId, "roomId"),
+    actorId: principal.id,
+    actorName: principal.name,
+    agentId: requiredAgentId(args.agentId, "agentId"),
+    targetAgentId: optionalAgentId(args.targetAgentId, "targetAgentId"),
+    phaseId: optionalString(args.phaseId),
+    messageType: requiredRoomMessageType(args.messageType),
+    message: requiredString(args.message, "message"),
+    evidence: optionalStringArray(args.evidence),
+    actions: optionalStringArray(args.actions),
+  }) };
+  if (name === "tawny_close_agent_room") return { room: await closeAgentRoom({
+    tenantId: principal.tenantId,
+    roomId: requiredString(args.roomId, "roomId"),
+    actorId: principal.id,
+    actorName: principal.name,
+    agentId: requiredAgentId(args.agentId, "agentId"),
+    summary: requiredString(args.summary, "summary"),
+  }) };
+  if (name === "tawny_run_agent_workflow") return { run: await runAgentWorkflow({ tenantId: principal.tenantId, alertId: requiredString(args.alertId, "alertId"), workflowId: requiredString(args.workflowId, "workflowId"), actorName: principal.name, trigger: "hermes-mcp" }) };
   if (name === "tawny_run_agent_mesh") return { run: await runAgentMesh({ tenantId: principal.tenantId, alertId: requiredString(args.alertId, "alertId"), actorName: principal.name, trigger: "hermes-mcp" }) };
   if (name === "tawny_list_agent_runs") return { runs: await listAgentRuns(principal.tenantId, optionalNumber(args.limit) ?? 10) };
   if (name === "tawny_list_hunt_schedules") return { schedules: await listHuntSchedules(principal.tenantId) };
@@ -268,7 +429,16 @@ async function invokeMcpTool(name: string, args: Record<string, unknown>, princi
 }
 
 function objectSchema(properties: Record<string, unknown>, required: string[] = []) {
-  return { type: "object", properties, required, additionalProperties: false };
+  return {
+    type: "object",
+    properties: {
+      ...properties,
+      ...(Object.hasOwn(properties, "roomId") ? {} : { roomId: { type: "string", description: "Optional shared agent room ID. When present with agentId, Tawny records complete tool input and output trace." } }),
+      ...(Object.hasOwn(properties, "agentId") ? {} : { agentId: { type: "string", enum: socAgentIds, description: "Calling Hermes Bot Mode specialist identity for room attribution." } }),
+    },
+    required,
+    additionalProperties: false,
+  };
 }
 
 function toolResult(output: unknown) {
@@ -298,4 +468,46 @@ function optionalString(value: unknown) {
 
 function optionalNumber(value: unknown) {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function requiredAgentId(value: unknown, field: string) {
+  if (!isSocAgentId(value)) throw new Error(`${field} must identify a registered SOC agent.`);
+  return value;
+}
+
+function optionalAgentId(value: unknown, field: string) {
+  if (value === undefined || value === null || value === "") return undefined;
+  return requiredAgentId(value, field);
+}
+
+function requiredRoomMessageType(value: unknown): AgentRoomMessageType {
+  if (value === "message" || value === "handoff" || value === "decision" || value === "status" || value === "approval.requested" || value === "agent.completed") return value;
+  throw new Error("messageType is invalid.");
+}
+
+function optionalStringArray(value: unknown) {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value) || value.some((item) => typeof item !== "string")) throw new Error("Expected an array of strings.");
+  return value.map((item) => item.trim()).filter(Boolean);
+}
+
+function toolTraceContext(args: Record<string, unknown>) {
+  if (typeof args.roomId !== "string" || !args.roomId.trim()) return undefined;
+  return { roomId: args.roomId.trim(), agentId: requiredAgentId(args.agentId, "agentId") };
+}
+
+function traceValue(value: unknown): unknown {
+  const sanitized = redactTraceValue(value);
+  const encoded = JSON.stringify(sanitized);
+  if (encoded.length <= 32_000) return sanitized;
+  return { truncated: true, originalCharacters: encoded.length, preview: encoded.slice(0, 32_000) };
+}
+
+function redactTraceValue(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(redactTraceValue);
+  if (!isRecord(value)) return value;
+  return Object.fromEntries(Object.entries(value).map(([key, item]) => [
+    key,
+    /authorization|password|secret|token/i.test(key) ? "[REDACTED]" : redactTraceValue(item),
+  ]));
 }

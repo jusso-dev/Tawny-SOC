@@ -3,11 +3,31 @@ const document = {
   info: {
     title: "Tawny-SOC Agent API",
     version: "1.0.0",
-    description: "Tenant-scoped agent investigations, scheduled threat hunting, investigation context, threat intelligence, and approval-gated SOAR automation for Hermes and other MCP clients.",
+    description: "Tenant-scoped Hermes Bot Mode profiles, durable shared rooms, complete MCP trace events, reusable multi-agent workflows, scheduled threat hunting, investigation context, and approval-gated SOAR automation.",
   },
   servers: [{ url: "/api/v1" }],
   security: [{ bearerAuth: [] }],
   paths: {
+    "/agents": { get: { summary: "List specialist SOC agent profiles", responses: { "200": { description: "Agent catalog" }, "401": { description: "Requires alerts:read" } } } },
+    "/agent-workflows": { get: { summary: "List reusable multi-agent workflows", responses: { "200": { description: "Workflow catalog" }, "401": { description: "Requires playbooks:read" } } } },
+    "/agent-rooms": {
+      get: { summary: "List shared agent rooms with ordered trace events", parameters: [{ name: "limit", in: "query", schema: { type: "integer", minimum: 1, maximum: 50 } }], responses: { "200": { description: "Agent rooms" }, "401": { description: "Requires agent-rooms:read" } } },
+      post: {
+        summary: "Open a durable Hermes Bot Mode room",
+        requestBody: { required: true, content: { "application/json": { schema: { type: "object", required: ["alertId", "workflowId", "agentId"], properties: { alertId: { type: "string" }, workflowId: { type: "string" }, agentId: { type: "string" }, title: { type: "string" } } } } } },
+        responses: { "201": { description: "Room opened" }, "401": { description: "Requires agent-rooms:write" }, "404": { description: "Workflow or alert not found" } },
+      },
+    },
+    "/agent-rooms/{id}": { get: { summary: "Read one room, including bot messages, tool calls, handoffs, approvals, and outcomes", parameters: [pathId()], responses: { "200": { description: "Complete ordered room trace" }, "401": { description: "Requires agent-rooms:read" }, "404": { description: "Room not found" } } } },
+    "/agent-workflows/{id}/runs": {
+      post: {
+        summary: "Run a specialist workflow against an alert",
+        description: "Executes ordered specialist phases and persists their handoffs. Response phases propose approval-gated actions but never execute containment.",
+        parameters: [pathId()],
+        requestBody: { required: true, content: { "application/json": { schema: { type: "object", required: ["alertId"], properties: { alertId: { type: "string" } } } } } },
+        responses: { "200": { description: "Completed workflow ledger" }, "401": { description: "Requires alerts:read" }, "404": { description: "Workflow or alert not found" } },
+      },
+    },
     "/hunt": {
       get: {
         summary: "Run a YAAQL hunt across alerts and telemetry",

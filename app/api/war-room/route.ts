@@ -4,7 +4,7 @@ import { db, schema } from "@/lib/db/client";
 import { requirePermission } from "@/lib/governance";
 import { getSession } from "@/lib/session";
 import type { SocActor } from "@/lib/store";
-import { createHuntSchedule, runAgentMesh, runHuntSchedule, setHuntScheduleEnabled } from "@/lib/war-room";
+import { createHuntSchedule, runAgentMesh, runAgentWorkflow, runHuntSchedule, setHuntScheduleEnabled } from "@/lib/war-room";
 
 export async function POST(request: Request) {
   const session = await getSession();
@@ -17,6 +17,10 @@ export async function POST(request: Request) {
     if (action === "run-agent-mesh") {
       const run = await runAgentMesh({ tenantId: actor.tenantId, alertId: required(body.alertId, "alertId"), actorName: actor.name });
       return NextResponse.json({ message: "Agent mesh completed.", run });
+    }
+    if (action === "run-agent-workflow") {
+      const run = await runAgentWorkflow({ tenantId: actor.tenantId, alertId: required(body.alertId, "alertId"), workflowId: required(body.workflowId, "workflowId"), actorName: actor.name });
+      return NextResponse.json({ message: "Specialist workflow completed.", run });
     }
     if (action === "create-hunt-schedule") {
       requirePermission(actor.role, "detection.write");

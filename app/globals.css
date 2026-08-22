@@ -2545,35 +2545,56 @@ td .inline-action,
   resize: vertical;
 }
 
-.agent-contract {
+.workflow-catalog {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.65rem;
   margin: 0.85rem 0;
 }
 
-.agent-contract article {
-  position: relative;
-  min-height: 10.5rem;
+.workflow-catalog article {
+  padding: 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.workflow-catalog article > div { display: flex; gap: 0.45rem; align-items: center; }
+.workflow-catalog svg { color: var(--blue); }
+.workflow-catalog strong { font-size: 0.78rem; }
+.workflow-catalog span { margin-left: auto; color: var(--faint); font-size: 0.64rem; }
+.workflow-catalog p { margin: 0.5rem 0; color: var(--muted); font-size: 0.7rem; line-height: 1.4; }
+.workflow-catalog small { color: var(--faint); font-size: 0.61rem; text-transform: capitalize; }
+
+.agent-library-panel {
+  margin-bottom: 0.85rem;
   padding: 1rem;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface);
 }
 
-.agent-contract article > span {
-  position: absolute;
-  top: 0.8rem;
-  right: 0.8rem;
-  color: var(--faint);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 0.72rem;
+.agent-contract {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10.5rem, 1fr));
+  gap: 0.5rem;
 }
 
-.agent-contract svg { color: var(--blue); }
-.agent-contract h2 { margin: 1.2rem 0 0.35rem; font-size: 1rem; }
-.agent-contract p { margin: 0; color: var(--muted); font-size: 0.78rem; line-height: 1.45; }
-.agent-contract small { display: block; margin-top: 0.8rem; color: var(--text); font-size: 0.7rem; font-weight: 700; }
+.agent-contract article {
+  display: flex;
+  gap: 0.65rem;
+  align-items: flex-start;
+  min-width: 0;
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) - 2px);
+  background: var(--surface-2);
+}
+
+.agent-contract i { display: grid; flex: 0 0 2rem; width: 2rem; height: 2rem; place-items: center; border-radius: 7px; color: #101218; font-size: 0.64rem; font-style: normal; font-weight: 900; }
+.agent-contract h2 { margin: 0; font-size: 0.78rem; }
+.agent-contract p { display: -webkit-box; margin: 0.18rem 0 0; overflow: hidden; color: var(--muted); font-size: 0.66rem; line-height: 1.4; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
+.agent-contract small { display: block; margin-top: 0.35rem; color: var(--faint); font-size: 0.6rem; font-weight: 700; }
 
 .war-room-grid {
   display: grid;
@@ -2593,12 +2614,31 @@ td .inline-action,
 .run-state { padding: 0.25rem 0.45rem; border-radius: 999px; background: var(--green-soft); color: var(--green); font-size: 0.65rem; font-weight: 750; text-transform: uppercase; }
 .run-state.failed { background: var(--red-soft); color: var(--red); }
 .run-summary { margin: 0; padding: 0 0.8rem 0.75rem; color: var(--muted); font-size: 0.8rem; line-height: 1.5; }
-.run-steps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; border-top: 1px solid var(--border); background: var(--border); }
+.room-transcript { display: grid; gap: 0.45rem; padding: 0.8rem; border-top: 1px solid var(--border); background: color-mix(in srgb, var(--bg) 58%, transparent); }
+.room-event { position: relative; padding: 0.7rem 0.75rem 0.7rem 1rem; border: 1px solid var(--border); border-radius: calc(var(--radius) - 3px); background: var(--surface); }
+.room-event::before { position: absolute; top: 0.72rem; bottom: 0.72rem; left: 0.45rem; width: 2px; border-radius: 2px; background: var(--blue); content: ""; }
+.room-event.failed::before { background: var(--red); }
+.room-event.waiting::before { background: var(--orange); }
+.room-event > div { display: flex; gap: 0.4rem; align-items: center; min-width: 0; }
+.room-event > div span { color: var(--faint); font-size: 0.58rem; font-variant-numeric: tabular-nums; }
+.room-event > div strong { font-size: 0.7rem; text-transform: capitalize; }
+.room-event > div small { color: var(--muted); font-size: 0.62rem; text-transform: capitalize; }
+.room-event > div em { padding: 0.14rem 0.32rem; border-radius: 999px; background: var(--blue-soft); color: var(--blue); font-size: 0.56rem; font-style: normal; }
+.room-event > div time { margin-left: auto; color: var(--faint); font-size: 0.58rem; }
+.room-event > p { margin: 0.42rem 0 0; color: var(--text); font-size: 0.7rem; line-height: 1.45; }
+.room-event > code { display: inline-block; margin-top: 0.42rem; color: var(--muted); font-size: 0.62rem; }
+.room-event details { margin-top: 0.5rem; }
+.room-event details summary { display: block; padding: 0; color: var(--muted); font-size: 0.62rem; }
+.room-event pre { max-height: 18rem; margin: 0.45rem 0 0; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 0.6rem; line-height: 1.4; }
+.legacy-room-note { margin: 0; color: var(--muted); font-size: 0.7rem; }
+.run-steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: 1px; border-top: 1px solid var(--border); background: var(--border); }
 .run-steps article { padding: 0.75rem; background: var(--surface); }
 .run-steps article > div { display: flex; gap: 0.35rem; align-items: center; }
 .run-steps article > div span { font-size: 0.72rem; font-weight: 800; }
 .run-steps article > div em { padding: 0.15rem 0.3rem; border-radius: 999px; background: var(--blue-soft); color: var(--blue); font-size: 0.6rem; font-style: normal; }
+.run-steps article > div .approval-chip { background: var(--orange-soft); color: var(--orange); }
 .run-steps article > div b { margin-left: auto; font-size: 0.66rem; }
+.run-steps h3 { margin: 0.45rem 0 0; font-size: 0.68rem; }
 .run-steps p { margin: 0.55rem 0; color: var(--muted); font-size: 0.7rem; line-height: 1.45; }
 .run-steps small { display: block; margin-top: 0.28rem; padding-left: 0.55rem; border-left: 2px solid var(--border); color: var(--text); font-size: 0.64rem; line-height: 1.35; }
 
@@ -2677,6 +2717,7 @@ td .inline-action,
 .hermes-setup-grid p { color: var(--muted); font-size: 0.76rem; line-height: 1.5; }
 .hermes-setup-grid pre { max-width: 100%; margin: 0; overflow: auto; padding: 0.75rem; border-radius: 6px; background: var(--bg); color: var(--text); font-size: 0.68rem; line-height: 1.5; }
 .hermes-proof { display: grid; grid-template-columns: auto 1fr; gap: 0.5rem; align-items: center; color: var(--muted); font-size: 0.72rem; }
+.agent-toggle-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 
 @media (max-width: 1100px) {
   .app-shell {

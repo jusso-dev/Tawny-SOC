@@ -19,32 +19,27 @@ export default async function IntegrationsPage() {
 
       <section className="panel hermes-integration" id="hermes">
         <div className="panel-heading">
-          <div><p className="eyebrow">Hermes Agent</p><h2>Give every Hermes bot a native Tawny-SOC toolset.</h2><p>Hermes supports remote HTTP MCP directly. No Claude Code, Codex, or other AI harness sits between the bot and this SOC.</p></div>
+          <div><p className="eyebrow">Hermes Bot Mode</p><h2>Install 13 named SOC bots with durable shared rooms.</h2><p>Each profile gets own <code>SOUL.md</code>, Bot Mode identity, scoped remote MCP tools, and complete Tawny-side collaboration trace.</p></div>
           <Bot size={20} aria-hidden />
         </div>
         <div className="hermes-setup-grid">
           <div>
-            <span className="setup-number">01</span><h3>Create scoped token</h3><p>Use a member token for investigation. Use admin only when Hermes must create hunt schedules.</p>
+            <span className="setup-number">01</span><h3>Create per-bot tokens</h3><p>Create one member token per profile. Include <code>agent-rooms:read</code> and <code>agent-rooms:write</code>; unique token names provide durable actor attribution.</p>
             <Link className="text-button" href="/settings/api-tokens">Open API tokens</Link>
           </div>
           <div>
-            <span className="setup-number">02</span><h3>Add remote MCP</h3>
-            <pre><code>{`mcp_servers:
-  tawny_soc:
-    url: "http://192.168.1.19:3014/api/mcp"
-    headers:
-      Authorization: "Bearer \${TAWNY_SOC_TOKEN}"
-    tools:
-      include:
-        - tawny_run_agent_mesh
-        - tawny_list_agent_runs
-        - tawny_hunt
-        - tawny_list_hunt_schedules
-        - tawny_run_hunt_schedule`}</code></pre>
+            <span className="setup-number">02</span><h3>Install profiles</h3>
+            <pre><code>{`pnpm hermes:profiles:install
+
+# Existing profiles: review, then replace only managed files
+pnpm hermes:profiles:install -- --force`}</code></pre>
           </div>
           <div>
-            <span className="setup-number">03</span><h3>Reload and prove</h3><p>Put token in <code>~/.hermes/.env</code>, run <code>/reload-mcp</code>, then ask Hermes to list Tawny-SOC investigation ledgers.</p>
-            <div className="hermes-proof"><Cable size={15} aria-hidden /><span>Streamable HTTP</span><ShieldCheck size={15} aria-hidden /><span>Scope filtered</span></div>
+            <span className="setup-number">03</span><h3>Add secrets and group</h3><p>Copy each profile&apos;s <code>.env.EXAMPLE</code> to <code>.env</code>, add its dedicated token, then create Hermes group <strong>Tawny SOC War Room</strong> and seat all profiles.</p>
+          </div>
+          <div>
+            <span className="setup-number">04</span><h3>Reload and prove</h3><p>Reload MCP for each profile. Open alert mission in group; verify same room appears under <Link href="/war-room">War room</Link> with messages, tool inputs, outputs, handoffs, and timestamps.</p>
+            <div className="hermes-proof"><Cable size={15} aria-hidden /><span>Native Bot Mode</span><ShieldCheck size={15} aria-hidden /><span>Per-bot audit</span></div>
           </div>
         </div>
       </section>

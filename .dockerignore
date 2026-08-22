@@ -1,6 +1,8 @@
 node_modules
 .next
 data/runtime
+hermes-sidecar-data
+backups
 *.tsbuildinfo
 .env
 .DS_Store

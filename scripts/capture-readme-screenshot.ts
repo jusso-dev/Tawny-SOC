@@ -4,7 +4,7 @@ import { chromium } from "@playwright/test";
 
 const baseUrl = process.env.SCREENSHOT_URL ?? "http://localhost:3001";
 const captures = [
-  { path: "/war-room", heading: "Agents investigate. Analysts command.", output: "docs/screenshots/ai-war-room.png" },
+  { path: "/war-room", heading: "Specialists investigate. Analysts command.", output: "docs/screenshots/ai-war-room.png" },
   { path: "/world", heading: "See attack pressure outside your perimeter.", output: "docs/screenshots/world-view.png" },
   { path: "/", heading: "Endpoint signals, ready for triage.", output: "docs/screenshots/soc-overview.png" },
 ];

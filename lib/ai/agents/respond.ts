@@ -34,7 +34,7 @@ export function deterministicRespond(input: RespondInput, note?: string): Respon
 
 export async function runRespondAgent(tenantId: string, input: RespondInput): Promise<RespondAgentResult> {
   const fallback = deterministicRespond(input);
-  const run = await runAgentJson(tenantId, "respond", [
+  const run = await runAgentJson(tenantId, "responder", [
     {
       role: "system",
       content:

@@ -34,7 +34,7 @@ export function deterministicDetect(input: DetectInput, note?: string): DetectAg
 
 export async function runDetectAgent(tenantId: string, input: DetectInput): Promise<DetectAgentResult> {
   const fallback = deterministicDetect(input);
-  const run = await runAgentJson(tenantId, "detect", [
+  const run = await runAgentJson(tenantId, "correlator", [
     {
       role: "system",
       content:
