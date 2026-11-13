@@ -21,13 +21,12 @@
   },
   "dependencies": {
     "@better-auth/drizzle-adapter": "^1.6.25",
-    "@next/eslint-plugin-next": "^16.2.9",
     "better-auth": "^1.6.25",
     "clsx": "^2.1.1",
     "dotenv": "^17.4.2",
     "drizzle-orm": "^0.45.2",
     "lucide-react": "^0.460.0",
-    "next": "^16.2.12",
+    "next": "^16.4.6",
     "node-cron": "^4.5.0",
     "postgres": "^3.4.9",
     "react": "^19.2.7",
@@ -37,6 +36,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@next/eslint-plugin-next": "^16.4.6",
     "@playwright/test": "^1.61.1",
     "@types/node": "^22.20.0",
     "@types/node-cron": "^3.0.11",
@@ -45,7 +45,7 @@
     "@types/uuid": "^11.0.0",
     "drizzle-kit": "^0.31.10",
     "eslint": "^9.39.4",
-    "eslint-config-next": "^16.2.9",
+    "eslint-config-next": "^16.4.6",
     "tsx": "^4.22.4",
     "typescript": "^5.9.3",
     "vite": "^8.0.16",
